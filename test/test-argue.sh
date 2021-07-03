@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ../argue.sh
+source $(dirname $0)/../argue.sh
 
 argue optional "-h|--help|help" do 'echo Options:' \
     as 'Print this usage' -- $@

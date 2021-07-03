@@ -1,8 +1,8 @@
 #!/bin/bash
 
-source ../proceed.sh
+source $(dirname $0)/../proceed.sh
 
-proceed to 'notify' do "echo one" do "echo two" on EXIT in /dev/stderr
+proceed to 'count down' do 'echo three' do "echo two" do "echo one" on EXIT in /dev/stderr
 
 dir=/tmp/dir
 if proceed to "make directory $dir" do "mkdir -vp $dir" do "chmod -v 755 $dir" in /dev/stdout ; then
