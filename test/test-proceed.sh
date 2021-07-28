@@ -18,3 +18,11 @@ for file in '/tmp/file' '/etc/file' "${HOME}/file"; do
         proceed to "rm -vf $file" on EXIT in /dev/stdout
     fi
 done
+
+sleep_for() (
+    for (( sec = 1; sec <= $1; sec++ )); do
+        echo sleeping $sec second; sleep 1
+    done
+)
+
+proceed to 'sleep for 10 seconds' do 'sleep_for 10' in /dev/stdout
