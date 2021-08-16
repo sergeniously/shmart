@@ -3,10 +3,10 @@
 # About:
 #  parse, enter or print arguments like argument[=value];
 # Usage:
-#  argue required|optional argname[...] [to varname[[]] [~ pattern |= certain] [or default] [of measure]] [do command] [as comment] -- $@
+#  argue required|optional argname [...] [to varname[[]] [~ pattern |= certain] [or default] [of measure]] [do command] [as comment] -- $@
 # Where:
 #  @argname: a pattern of an argument name, e.g. "-a|--arg"
-#   * adding ... at the end of it makes an argument multiple
+#   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
 #  @pattern: a regular expression to validate a value
@@ -29,9 +29,8 @@ argue() {
 	while (( "$#" )); do case $1 in
 		optional|required)
 			_meaning=$1
-			_argname=${2%...}
-			_several=${2#$_argname}
-			shift 2;;
+			_argname=$2; shift 2;;
+		...) _several=$1; shift ;;
 		to) _varname=${2%[]}
 			_vartype=${2#$_varname}
 			shift 2;;
@@ -94,7 +93,7 @@ argue() {
 			fi
 			(( _counter++ )); _meaning=optional; echo "${_entered:+ # OK}"
 			[[ -z $_entered || -z $_several ]] && break
-		done; return 0
+		done; return 101
 	fi
 	# parse argument
 	local _counter=0

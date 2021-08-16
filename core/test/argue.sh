@@ -20,7 +20,7 @@ argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}\.[0-9]{2}\.[1-
 	as 'When were you born?' -- $@
 argue optional --gender to gender ~ "(male|female)" or 'unknown' \
 	as 'How do you identify yourself?' -- $@
-argue required --language... of LANGUAGE to languages[] ~ "[a-z]+" \
+argue required --language ... of LANGUAGE to languages[] ~ "[a-z]+" \
 	as 'Which languages do you speak?' -- $@
 argue optional --books to interests[] = books \
 	as 'Do you like reading books?' -- $@
