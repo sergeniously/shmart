@@ -34,7 +34,9 @@ input() {
 	comment="$comment$([[ -n $masking ]] && echo "${initial//?/$masking}" || echo "$initial")"
 	while echo -ne "$comment"; do
 		local entered="$initial" snippet=''
-		while read -p "$snippet" -r -s -N1 snippet && [[ $snippet != $'\n' ]]; do
+		# FIX: there is a problem when <double/triple/or more> press of different keys occurs
+		# read function (or somewhat else) prints overflown characters despite on -s option
+		while read -p "$snippet" -rsn1 snippet && (( ${#snippet} )); do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
 				[[ -n $entered ]] && snippet=$'\b \b' || snippet=''
 				entered=${entered%?} # remove the last char
@@ -46,7 +48,7 @@ input() {
 				continue
 			fi
 			entered="${entered}${snippet}"
-			snippet="${masking-$snippet}"
+			snippet="${masking:-$snippet}"
 		done
 		if [[ $? -eq 0 ]]; then
 			if [[ -n $pattern && ! $entered =~ ^$pattern$ ]]; then

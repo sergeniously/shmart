@@ -1,20 +1,22 @@
 #!/bin/bash
 
-# Parse, enter or print arguments like argument[=value];
+# About:
+#  parse, enter or print arguments like argument[=value];
 # Usage:
 #  argue required|optional argname[...] [to varname[[]] [~ pattern |= certain] [or default] [of measure]] [do command] [as comment] -- $@
-#   @argname: a pattern of an argument name, e.g. "-a|--arg"
-#    * adding ... at the end of it makes an argument multiple
-#   @varname: a name of a variable to store a value
-#    * adding [] at the end of it tells to consider a variable as an array
-#   @pattern: a regular expression to validate a value
-#   @certain: a certain value which will be stored if an argument is specified
-#    * it is used only if a  validation pattern is not specified
-#   @default: a default value which will be stored if an argument is not specified
-#   @measure: a unit of an argument value
-#    * set it as PASSWORD to mask a value with asterisks on input
-#   @command: a command which will be performed if an argument is specified
-#   @comment: a description of an argument
+# Where:
+#  @argname: a pattern of an argument name, e.g. "-a|--arg"
+#   * adding ... at the end of it makes an argument multiple
+#  @varname: a name of a variable to store a value
+#   * adding [] at the end of it tells to treat a variable as an array
+#  @pattern: a regular expression to validate a value
+#  @certain: a certain value which will be stored if an argument is specified
+#   * it is used only if a  validation pattern is not specified
+#  @default: a default value which will be stored if an argument is not specified
+#  @measure: a unit of an argument value
+#   * set it as PASSWORD to mask a value with asterisks on input
+#  @command: a command which will be performed if an argument is specified
+#  @comment: a description of an argument
 # Examples:
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username' -- $@
 #  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password' -- $@
@@ -69,8 +71,12 @@ argue() {
 					[[ -n $_entered ]] && _content=$'\b \b' || _content=''
 					_entered=${_entered%?}
 					continue
+				elif [[ $(printf '%d' "'$_content") -lt 32 ]]; then
+					# swallow control-character sequences
+					read -rs -t 0.001; _content=''
+					continue
 				fi
-				_entered="$_entered$_content"
+				_entered="${_entered}${_content}"
 				if [[ ${_measure^^} == PASSWORD ]]; then
 					_content='*'
 				fi
@@ -86,7 +92,7 @@ argue() {
 				[[ $_meaning == required ]] && echo "# empty value of required argument" && continue
 				argue_store "$_default"
 			fi
-			(( _counter++ )); _meaning=optional; echo
+			(( _counter++ )); _meaning=optional; echo "${_entered:+ # OK}"
 			[[ -z $_entered || -z $_several ]] && break
 		done; return 0
 	fi
