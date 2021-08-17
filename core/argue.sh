@@ -3,9 +3,12 @@
 # About:
 #  parse, enter or print arguments like argument[=value];
 # Usage:
-#  argue required|optional argname [...] [to varname[[]] [[~ pattern] [? checker]] | [= certain] [or default] [of measure]] [do command] [as comment] -- "$@"
+#  argue required|optional|internal argname [...] [of measure] [to varname[[]] [[~ pattern] [? checker]] | [= certain] [or default]] [do command] [as comment] -- "$@"
 # Where:
 #  @argname: a pattern of an argument name, e.g. "-a|--arg"
+#   * required: makes an argument required to specify
+#   * optional: makes an argument optional to specify
+#   * internal: describes arguments of guide and usage modes
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
@@ -20,13 +23,14 @@
 #  @command: a command which will be performed if an argument is specified
 #  @comment: a description of an argument
 # Examples:
+#  argue internal "-h|--help|help" of guide do guide as 'Print this guide' -- $@
+#  argue internal "--usage|usage" of usage as 'Print short usage' -- $@
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username' -- $@
 #  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password' -- $@
 #  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?' -- $@
 #  argue optional --language... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?' -- $@
 # TODO:
-#  + implement 'internal argname of guide|usage' to manage help and usage modes
 #  + substitute @default value with 'no' for arguments without @pattern during input
 #  + implement [eg example] option to print it on usage instead of varname
 
@@ -35,7 +39,7 @@ argue() {
 	local pattern certain default command comment
 	local checker trouble counter=0
 	while (("$#")); do case $1 in
-		optional|required)
+		optional|required|internal)
 			meaning=$1; argname=$2; shift 2;;
 		to) varname=$2; shift 2;;
 		 ~) pattern=$2; shift 2;;
@@ -49,20 +53,26 @@ argue() {
 		--) shift; break;;
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
+	if [[ $meaning == internal ]]; then
+		case $measure in
+			guide) argue_guide="$argname";;
+			usage) argue_usage="$argname";;
+		esac
+	fi
 	# print argument
-	if [[ $1 =~ ^(-h|--help|help|guide)$ ]]; then
+	if [[ -n $argue_guide && $1 =~ ^($argue_guide)$ ]]; then
 		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
 		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
 		printf "%6s*${meaning}* ${comment}\n"
 		return 200
 	fi
 	# usage argument
-	if [[ $1 =~ ^(--usage|usage)$ ]]; then
-		if [[ $argname == "-h|--help|help" ]]; then
-			echo -n "$(basename $0) "
-		else
+	if [[ -n $argue_usage && $1 =~ ^($argue_usage)$ ]]; then
+		if [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argname/|*/}${pattern+=${measure-$varname}}$several"
+		elif [[ $measure == usage ]]; then
+			echo -n "$(basename $0) "
 		fi
 		return 201
 	fi
@@ -107,7 +117,7 @@ argue() {
 		done
 	}
 	# enter argument
-	if !(("$#")); then
+	if !(("$#")) && [[ $meaning != internal ]]; then
 		local consent="y|yes" dissent="n|no"
 		echo "${comment-${varname-$argname}} <${measure-${pattern-($consent|$dissent)}}>${default+ (default: $default)}"
 		while printf "%3s$meaning > " && argue-enter; do

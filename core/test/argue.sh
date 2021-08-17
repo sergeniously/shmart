@@ -2,18 +2,20 @@
 
 source $(dirname $0)/../argue.sh
 
-usage() {
+guide() {
     echo 'About: test script for argue function'
     echo "Usage: $(basename $0) [options] # run without options to input"
-    echo 'Options:'
+    echo 'Guide:'
 }
 
 check-date() {
 	date +%s --date ${1:6}-${1:3:2}-${1:0:2}
 }
 
-argue optional "-h|--help|help" do usage \
-	as 'Print this usage' -- "$@"
+argue internal "-h|--help|help|guide|sos|how|\?" of guide do guide \
+	as 'Print this guide' -- "$@"
+argue internal "--usage|usage" of usage \
+	as 'Print short usage' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username' -- "$@"
 argue required --password of PASSWORD to password ~ ".{6,32}" \
