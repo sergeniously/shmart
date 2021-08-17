@@ -8,6 +8,10 @@ usage() {
     echo 'Options:'
 }
 
+check-date() {
+	date +%s --date ${1:6}-${1:3:2}-${1:0:2}
+}
+
 argue optional "-h|--help|help" do usage \
 	as 'Print this usage' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
@@ -16,7 +20,7 @@ argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password' -- "$@"
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "$username" \
 	as 'What is your real name?' -- "$@"
-argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" \
+argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" ? 'check-date {}' \
 	as 'When were you born?' -- "$@"
 argue optional --gender to gender ~ "(male|female)" or 'unknown' \
 	as 'How do you identify yourself?' -- "$@"
@@ -38,7 +42,7 @@ if (( ${#birthdate} == 8 )); then
 fi
 
 age() {
-	if seconds=$(date +%s --date ${birthdate:6}-${birthdate:3:2}-${birthdate:0:2} 2> /dev/null); then
+	if seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
 		echo $(( ($(date +%s) - $seconds) / (86400*365) ))
 	else
 		echo unknown
@@ -46,13 +50,13 @@ age() {
 }
 
 echo
-echo "Check your info"
+echo "Check your profile"
 printf "%10s: %s\n" \
 	'Username' "$username" \
 	'Password' "$([[ $show_password == yes ]] && echo "$password" || echo "${password//?/*}")" \
 	'Real name' "$realname" \
 	'Birthdate' "$birthdate" \
-	'Age' "~ $(age) y.o." \
+	'Age' "~ $(age "$birthdate") y.o." \
 	'Gender' "$gender" \
 	"Languages" "${languages[*]}" \
 	"Interests" "${interests[*]}"
