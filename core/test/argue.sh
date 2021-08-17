@@ -9,26 +9,41 @@ usage() {
 }
 
 argue optional "-h|--help|help" do usage \
-	as 'Print this usage' -- $@
+	as 'Print this usage' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
-	as 'Make up a username' -- $@
+	as 'Make up a username' -- "$@"
 argue required --password of PASSWORD to password ~ ".{6,32}" \
-	as 'Make up a password' -- $@
+	as 'Make up a password' -- "$@"
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "$username" \
-	as 'What is your real name?' -- $@
-argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}\.[0-9]{2}\.[1-9]{4}" \
-	as 'When were you born?' -- $@
+	as 'What is your real name?' -- "$@"
+argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" \
+	as 'When were you born?' -- "$@"
 argue optional --gender to gender ~ "(male|female)" or 'unknown' \
-	as 'How do you identify yourself?' -- $@
-argue required --language ... of LANGUAGE to languages[] ~ "[a-z]+" \
-	as 'Which languages do you speak?' -- $@
+	as 'How do you identify yourself?' -- "$@"
+argue required "--lang|--language" ... of LANGUAGE to languages[] ~ "[a-z]+" \
+	as 'Which languages do you speak?' -- "$@"
 argue optional --books to interests[] = books \
-	as 'Do you like reading books?' -- $@
+	as 'Do you like reading books?' -- "$@"
 argue optional --music to interests[] = music \
-	as 'Do you like listening music?' -- $@
+	as 'Do you like listening music?' -- "$@"
 argue optional --show-password to show_password = yes or no \
-	as 'Do you wanna see password?' -- $@
-[[ $? -eq 202 ]] && exit
+	as 'Do you wanna see password?' -- "$@"
+argue optional --show-datetime do date \
+	as 'Do you wanna see datetime?' -- "$@"
+[[ $? -ge 200 ]] && echo && exit
+
+# normalize birthdate
+if (( ${#birthdate} == 8 )); then
+	birthdate="${birthdate:0:2}.${birthdate:2:2}.${birthdate:4:4}"
+fi
+
+age() {
+	if seconds=$(date +%s --date ${birthdate:6}-${birthdate:3:2}-${birthdate:0:2} 2> /dev/null); then
+		echo $(( ($(date +%s) - $seconds) / (86400*365) ))
+	else
+		echo unknown
+	fi
+}
 
 echo
 echo "Check your info"
@@ -37,7 +52,7 @@ printf "%10s: %s\n" \
 	'Password' "$([[ $show_password == yes ]] && echo "$password" || echo "${password//?/*}")" \
 	'Real name' "$realname" \
 	'Birthdate' "$birthdate" \
-	'Age' "~$(( ($(date +%s) - $(date +%s --date ${birthdate:6}-${birthdate:3:2}-${birthdate:0:2})) / (86400*365) )) y.o." \
+	'Age' "~ $(age) y.o." \
 	'Gender' "$gender" \
 	"Languages" "${languages[*]}" \
 	"Interests" "${interests[*]}"

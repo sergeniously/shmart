@@ -21,8 +21,7 @@ argue optional --max of number to max ~ "[0-9]+" or 255 \
 	as 'Maximal position to stop' -- $@
 argue optional --no-scan to do_scan = false or true \
 	as 'Proceed without scanning?' -- $@
-[[ $? -eq 202 ]] && exit
-echo
+[[ $? -ge 200 ]] && echo && exit
 
 if $do_scan; then
 	for (( ip = $min; ip <= $max; ip++ )); do

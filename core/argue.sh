@@ -3,7 +3,7 @@
 # About:
 #  parse, enter or print arguments like argument[=value];
 # Usage:
-#  argue required|optional argname [...] [to varname[[]] [~ pattern |= certain] [or default] [of measure]] [do command] [as comment] -- $@
+#  argue required|optional argname [...] [to varname[[]] [~ pattern |= certain] [or default] [of measure]] [do command] [as comment] -- "$@"
 # Where:
 #  @argname: a pattern of an argument name, e.g. "-a|--arg"
 #   * adding ... after it makes an argument multiple
@@ -23,104 +23,121 @@
 #  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?' -- $@
 #  argue optional --language... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?' -- $@
+# TODO:
+#  + implement an ability to check values by function using @pattern with different syntaxes: /regexp/ or (method)
+#  + substitute @default value with 'no' for arguments without @pattern during input
+#  + implement [eg example] option to print it on usage instead of varname
+
 argue() {
-	local _meaning _argname _several _varname _vartype _measure
-	local _pattern _certain _default _command _comment
+	local meaning argname several varname measure
+	local pattern certain default command comment
 	while (( "$#" )); do case $1 in
 		optional|required)
-			_meaning=$1
-			_argname=$2; shift 2;;
-		...) _several=$1; shift ;;
-		to) _varname=${2%[]}
-			_vartype=${2#$_varname}
-			shift 2;;
-		 ~) _pattern=$2; shift 2;;
-		 =) _certain=$2; shift 2;;
-		of) _measure=$2; shift 2;;
-		or) _default=$2; shift 2;;
-		do) _command=$2; shift 2;;
-		as) _comment=$2; shift 2;;
+			meaning=$1
+			argname=$2; shift 2;;
+		...) several=$1; shift ;;
+		to) varname=$2; shift 2;;
+		 ~) pattern=$2; shift 2;;
+		 =) certain=$2; shift 2;;
+		of) measure=$2; shift 2;;
+		or) default=$2; shift 2;;
+		do) command=$2; shift 2;;
+		as) comment=$2; shift 2;;
 		--) shift; break;;
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
 	# print argument
 	if [[ $1 =~ ^(-h|--help|help)$ ]]; then
-		[[ $1 =~ ^($_argname)$ && -n $_command ]] && eval "$_command"
-		printf "%2s${_argname//|/, }${_pattern+=${_measure-$_pattern}${_several}${_default+ (default: '$_default')}}\n"
-		printf "%6s*${_meaning}* ${_comment}\n"
-		return 202 # aka sos
+		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
+		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
+		printf "%6s*${meaning}* ${comment}\n"
+		return 200
+	fi
+	# usage argument
+	if [[ $1 =~ ^(--usage|usage)$ ]]; then
+		if [[ $argname == "-h|--help|help" ]]; then
+			echo -n "Usage: $(basename $0) "
+		else
+			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
+				"${argname/|*/}${pattern+=${measure-$varname}}$several"
+		fi
+		return 201
 	fi
 
 	argue_store() {
-		if ((${#1})); then
-			eval $(printf $([[ $_vartype == '[]' ]] && echo "%s+=('%s')" || echo "%s='%s'") "$_varname" "$1")
-		elif [[ ! -v $_varname ]]; then
-			eval $(printf $([[ $_vartype == '[]' ]] && echo "%s=()" || echo "%s=''") "$_varname")
+		if ((${#varname})); then
+			if [[ ${varname//[^\[\]]/} == '[]' ]]; then
+				((${#1})) && eval "${varname%[]}+=('$1')"
+			else
+				eval "${varname%[]}='$1'"
+			fi
 		fi
 	}
+	local counter=0
 	# enter argument
-	if !(("$#")) && [[ -n $_varname ]]; then
-		local _consent="y|yes" _dissent="n|no"
-		local _ex_pattern=${_pattern-($_consent|$_dissent)} _counter=0
-		echo "${_comment-${_varname-$_argname}} ${_measure+$_measure=}${_ex_pattern}${_default+ (default: $_default)}"
-		while printf "%3s$_meaning > "; do
-			local _entered='' _content=''
-			while read -p "$_content" -r -s -N1 _content && [[ $_content != $'\n' ]]; do
-				if [[ $_content == $'\177' || $_content == $'\010' ]]; then
-					[[ -n $_entered ]] && _content=$'\b \b' || _content=''
-					_entered=${_entered%?}
+	if !(("$#")); then
+		local consent="y|yes" dissent="n|no"
+		local ex_pattern=${pattern-($consent|$dissent)}
+		echo "${comment-${varname-$argname}} ${measure+$measure=}${ex_pattern}${default+ (default: $default)}"
+		while printf "%3s$meaning > "; do
+			local entered='' snippet=''
+			while read -p "$snippet" -r -s -N1 snippet && [[ $snippet != $'\n' ]]; do
+				if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
+					[[ -n $entered ]] && snippet=$'\b \b' || snippet=''
+					entered=${entered%?}
 					continue
-				elif [[ $(printf '%d' "'$_content") -lt 32 ]]; then
+				elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
 					# swallow control-character sequences
-					read -rs -t 0.001; _content=''
+					read -rs -t 0.001; snippet=''
 					continue
 				fi
-				_entered="${_entered}${_content}"
-				if [[ ${_measure^^} == PASSWORD ]]; then
-					_content='*'
+				entered="${entered}${snippet}"
+				if [[ ${measure^^} == PASSWORD ]]; then
+					snippet='*'
 				fi
 			done
-			if [[ -n $_entered ]]; then
-				[[ ! $_entered =~ ^$_ex_pattern$ ]] && echo " # invalid value; expected $_ex_pattern" && continue
-				if [[ -z $_pattern ]]; then
-					argue_store $([[ $_entered =~ ^($_consent)$ ]] && echo "$_certain" || echo "$_default")
+			if [[ -n $entered ]]; then
+				[[ ! $entered =~ ^$ex_pattern$ ]] && echo " # invalid value; expected $ex_pattern" && continue
+				if [[ -n $pattern ]]; then
+					argue_store "$entered"; (( counter++ ))
+				elif [[ $entered =~ ^($consent)$ ]]; then
+					argue_store "$certain"; (( counter++ ))
 				else
-					argue_store "$_entered"
+					argue_store "$default"
 				fi
-			elif [[ $_counter -eq 0 ]]; then
-				[[ $_meaning == required ]] && echo "# empty value of required argument" && continue
-				argue_store "$_default"
+			elif [[ $counter -eq 0 ]]; then
+				[[ $meaning == required ]] && echo "# empty value of required argument" && continue
+				argue_store "$default"
 			fi
-			(( _counter++ )); _meaning=optional; echo "${_entered:+ # OK}"
-			[[ -z $_entered || -z $_several ]] && break
-		done; return 101
+			meaning=optional; echo "${entered:+ # OK}"
+			[[ -z $entered || -z $several ]] && break
+		done
 	fi
 	# parse argument
-	local _counter=0
 	while (("$#")); do
-		if [[ $1 =~ ^($_argname) ]]; then
-			if [[ -n $_varname ]]; then
-				if [[ -z $_several && $_counter -gt 0 ]]; then
-					echo "Error: duplicate argument '$1'"; exit 1
-				fi
-				if [[ -n $_pattern ]]; then
-					[[ ! $1 =~ ^.+=.+$ ]] && echo "Error: missed value for argument '$1'" && exit 1
-					[[ ! ${1#*=} =~ ^$_pattern$ ]] && echo "Error: invalid value of argument '$1'; expected $_pattern" && exit 1
-					argue_store "${1#*=}"
-				else
-					argue_store "${_certain-$1}"
-				fi
+		if [[ $1 =~ ^($argname) ]]; then
+			if [[ -z $several && $counter -gt 0 ]]; then
+				echo "Error: duplicate argument '$1'"; exit 1
 			fi
-			(( _counter++ ))
+			if [[ -n $pattern ]]; then
+				[[ ! $1 =~ ^.+=(.+)$ ]] && echo "Error: missed value for argument '$1'" && exit 1
+				if [[ ! ${BASH_REMATCH[1]} =~ ^$pattern$ ]]; then
+					echo "Error: invalid value of argument '$1'; expected $pattern" && exit 1
+				fi
+				argue_store "${BASH_REMATCH[0]}"
+			else
+				argue_store "${certain-$1}"
+			fi
+			(( counter++ ))
 		fi
 		shift
 	done
-	if !(( $_counter )); then
-		[[ $_meaning == required ]] && echo "Error: missed required argument ${_argname//|/, }" && exit 1
-		[[ -n $_varname ]] && argue_store "$_default" && return 0
+	if !(($counter)); then
+		[[ $meaning == required ]] && echo "Error: missed required argument ${argname//|/, }" && exit 1
+		[[ -n $varname ]] && argue_store "$default" && return 0
 		return 1
-	else
-		[[ -n $_command ]] && eval "$_command"
+	elif ((${#command})); then
+		eval "$command"
 	fi
 	return 0
 }
