@@ -13,7 +13,7 @@ done
 
 # show backward progress (e.g. uninstalling)
 for (( percent = 100; percent >= 0; percent-- )); do
-	progress in uninstalling is $percent% as '>= <' on 96
+	progress is $percent% as '>= <' on 84 // uninstalling application
 	sleep 0.1
 done
 echo
