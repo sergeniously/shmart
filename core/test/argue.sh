@@ -3,13 +3,30 @@
 source $(dirname $0)/../argue.sh
 
 guide() {
-    echo 'About: test script for argue function'
-    echo "Usage: $(basename $0) [options] # run without options to input"
+    echo 'About: a demonstration script for argue function'
+    echo "Usage: $(basename $0) [options] # run without arguments to input"
     echo 'Guide:'
 }
 
 check-date() {
-	date +%s --date ${1:6}-${1:3:2}-${1:0:2}
+	local date="$1"
+	# normalize date
+	if (( ${#date} == 8 )); then
+		date="${date:0:2}.${date:2:2}.${date:4:4}"
+	fi
+	if ! date +%s --date ${date:6}-${date:3:2}-${date:0:2} &> /dev/null; then
+		echo "impossible date"; return 1
+	else
+		echo $date
+	fi
+}
+
+age() {
+	if seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
+		echo $(( ($(date +%s) - $seconds) / (86400*365) ))
+	else
+		echo unknown
+	fi
 }
 
 argue internal "-h|--help|help|guide|sos|how|\?" of guide do guide \
@@ -20,7 +37,7 @@ argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username' -- "$@"
 argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password' -- "$@"
-argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "$username" \
+argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
 	as 'What is your real name?' -- "$@"
 argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" ? 'check-date {}' \
 	as 'When were you born?' -- "$@"
@@ -37,19 +54,6 @@ argue optional --show-password to show_password = yes or no \
 argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?' -- "$@"
 [[ $? -ge 200 ]] && echo && exit
-
-# normalize birthdate
-if (( ${#birthdate} == 8 )); then
-	birthdate="${birthdate:0:2}.${birthdate:2:2}.${birthdate:4:4}"
-fi
-
-age() {
-	if seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
-		echo $(( ($(date +%s) - $seconds) / (86400*365) ))
-	else
-		echo unknown
-	fi
-}
 
 echo
 echo "Check your profile"

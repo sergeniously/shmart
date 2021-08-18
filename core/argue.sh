@@ -8,13 +8,15 @@
 #  @argname: a pattern of an argument name, e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
-#   * internal: describes arguments of guide and usage modes
+#   * internal: describes arguments of guide and usage features
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
 #  @pattern: a regular expression to validate a value
-#  @checker: a command line to validate a value, e.g. 'test -f {}'
-#   * the string {} is replaced by a value which is supposed to be checked
+#  @checker: a command to validate a value, e.g. 'test -f {}'
+#   * the string {} is replaced by a specified value of an argument
+#   * if a command succeeds its non-empty echo will be considered as a corrected value
+#   * if a command fails its echo will be displayed as en error
 #  @certain: a certain value which will be stored if an argument is specified
 #   * it is used only if a  validation pattern is not specified
 #  @default: a default value which will be stored if an argument is not specified
@@ -35,9 +37,9 @@
 #  + implement [eg example] option to print it on usage instead of varname
 
 argue() {
-	local meaning argname several varname measure
-	local pattern certain default command comment
-	local checker trouble counter=0
+	local meaning argname several measure
+	local varname pattern checker certain
+	local default command comment
 	while (("$#")); do case $1 in
 		optional|required|internal)
 			meaning=$1; argname=$2; shift 2;;
@@ -63,7 +65,7 @@ argue() {
 	if [[ -n $argue_guide && $1 =~ ^($argue_guide)$ ]]; then
 		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
 		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
-		printf "%6s*${meaning}* ${comment}\n"
+		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
 	fi
 	# usage argument
@@ -87,15 +89,17 @@ argue() {
 		fi
 		return 1
 	}
+	local checked
 	argue-check() { # $1 - value
 		if ((${#pattern})) && [[ ! $1 =~ ^$pattern$ ]]; then
-			trouble="invalid value; expected $pattern"
+			checked="invalid value; expected ${measure+$measure=}$pattern"
 			return 1
 		fi
 		if ((${#checker})); then
-			trouble=$(${checker//\{\}/$1} 2>&1)
+			checked=$(${checker//\{\}/$1} 2>&1)
 			return $?
 		fi
+		checked="${checked-$1}"
 	}
 	local entered
 	argue-enter() {
@@ -116,6 +120,7 @@ argue() {
 			fi
 		done
 	}
+	local counter=0
 	# enter argument
 	if !(("$#")) && [[ $meaning != internal ]]; then
 		local consent="y|yes" dissent="n|no"
@@ -124,9 +129,9 @@ argue() {
 			if ((${#entered})); then
 				if ((${#pattern})); then
 					if ! argue-check "$entered"; then
-						echo " # $trouble!" && continue
+						echo " # $checked!" && continue
 					fi
-					argue-store "$entered"; (( counter++ ))
+					argue-store "$checked"; (( counter++ ))
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
 					echo " # invalid value; expected ($consent|$dissent)" && continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
@@ -144,25 +149,27 @@ argue() {
 	fi
 	# parse argument
 	while (("$#")); do
-		if [[ $1 =~ ^($argname) ]]; then
+		if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
 			if [[ -z $several && $counter -gt 0 ]]; then
 				echo "$1 # duplicate argument!"; exit 1
 			fi
-			if ((${#pattern})); then
-				[[ ! $1 =~ ^.+=(.+)$ ]] && echo "$1 # argument needs a value!" && exit 1
-				if ! argue-check "${BASH_REMATCH[1]}"; then
-					echo "$1 # $trouble!"; exit 1
-				fi
-				argue-store "${BASH_REMATCH[0]}"
-			else
+			if !((${#pattern})); then
 				argue-store "${certain-$1}"
+			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
+				echo "$1 # argument needs a value!"; exit 1
+			elif ! argue-check "${BASH_REMATCH[3]}"; then
+				echo "$1 # $checked!"; exit 1
+			else
+				argue-store "$checked"
 			fi
 			(( counter++ ))
 		fi
 		shift
 	done
 	if !(($counter)); then
-		[[ $meaning == required ]] && echo "${argname//|/, } # missed required argument!" && exit 1
+		if [[ $meaning == required ]]; then
+			echo "${argname//|/, } # missed required argument!" && exit 1
+		fi
 		argue-store "$default"
 		return $?
 	elif ((${#command})); then
