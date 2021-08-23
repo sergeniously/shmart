@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # About:
-#  parse, enter or print arguments like argument[=value];
+#  parse, enter or print arguments like name[=value];
+# Right:
+#  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
-#  argue required|optional|internal argname [...] [of measure] [to varname[[]] [[~ pattern] [? checker]] | [= certain] [or default]] [do command] [as comment] -- "$@"
+#  argue required|optional|internal argname [of measure] [...] [to varname[[]]
+#        [[~ pattern] [? checker]] | [= certain]] [or default] [do command] [as comment] -- "$@"
 # Where:
-#  @argname: a pattern of an argument name, e.g. "-a|--arg"
+#  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
 #   * internal: describes arguments to cause embedded features depended on @measure
@@ -31,6 +34,7 @@
 #  200 if an argument's guide was printed
 #  201 if an argument's usage was printed
 #  202 if an argument's completion variants were printed
+#  203 if auto completion was installed
 #  1 on failure; 0 on success
 # Examples:
 #  argue internal "-h|--help|help" of guide do guide as 'Print this guide' -- $@
@@ -38,9 +42,10 @@
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username' -- $@
 #  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password' -- $@
 #  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?' -- $@
-#  argue optional --language... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
+#  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?' -- $@
 # TODO:
+#  + support specifying a set of checkers by ?, where /../ - regular expression, (..) - command, [] - list, etc
 #  + substitute @default value with 'no' for arguments without @pattern during input
 #  + implement [eg example] option to print it on usage instead of varname
 #  + try to detect redundant arguments and store them into argue_trash
@@ -66,20 +71,21 @@ argue() {
 	esac done
 	if [[ $meaning == internal ]]; then
 		case $measure in
-			guide) argue_guide="$argname";;
-			usage) argue_usage="$argname";;
-			offer) argue_offer="$argname";;
+			guide) ARGUE_GUIDE="$argname";;
+			usage) ARGUE_USAGE="$argname";;
+			offer) ARGUE_OFFER="$argname";;
+			setup) ARGUE_SETUP="$argname";;
 		esac
 	fi
 	# print argument guide
-	if [[ -n $argue_guide && $1 =~ ^($argue_guide)$ ]]; then
+	if [[ -n $ARGUE_GUIDE && $1 =~ ^($ARGUE_GUIDE)$ ]]; then
 		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
 		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
 		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
 	fi
 	# print argument usage
-	if [[ -n $argue_usage && $1 =~ ^($argue_usage)$ ]]; then
+	if [[ -n $ARGUE_USAGE && $1 =~ ^($ARGUE_USAGE)$ ]]; then
 		if [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argname/|*/}${pattern+=${measure-$varname}}$several"
@@ -89,21 +95,31 @@ argue() {
 		return 201
 	fi
 	# print auto completion variants for $2
-	if [[ -n $argue_offer && $1 =~ ^($argue_offer)$ ]]; then
+	if [[ -n $ARGUE_OFFER && $1 =~ ^($ARGUE_OFFER)$ ]]; then
 		if [[ $measure != offer ]]; then
 			for argword in ${argname//|/ }; do
-				if [[ $argword == $2 ]]; then
-					printf -- "$argword"; ((${#pattern}||${#checker})) && printf '='; echo; break
-				elif [[ $argword =~ ^$2 ]]; then
-					printf -- "$argword"; ((${#pattern}||${#checker})) || printf ' '; echo
+				if [[ $argword =~ ^$2 ]]; then
+					printf -- "$argword"; ((${#pattern}||${#checker})) && echo '=' || echo ' '
+				elif [[ $2 =~ ^$argword=(.*)$ ]]; then
+					local payload=${BASH_REMATCH[1]} variant
+					if [[ $pattern =~ ^\([|[:alnum:]]+\)$ ]]; then
+						for variant in ${pattern//[(|)]/ }; do
+							[[ $variant =~ ^$payload ]] && echo "$variant "
+						done
+					else
+						echo "$payload "
+					fi
 				fi
 			done
-		elif [[ $2 == install && -n $3 ]]; then
-			command=$(basename $0); local handler="_${command//[[:punct:]]/_}_completion"
-			echo -e "${handler}() {\n COMPREPLY=(\$($(readlink -f $0) --offer \${COMP_WORDS[\$COMP_CWORD]}))\n}" >> $3
-			echo "complete -o nospace -F ${handler} $command" >> $3
 		fi
 		return 202
+	fi
+	# install auto completion and run additional command
+	if [[ -n $ARGUE_SETUP && $1 =~ ^($ARGUE_SETUP)$ ]]; then
+		if [[ $measure == setup ]] && argue-setup && [[ -n $command ]]; then
+			eval "$command"
+		fi
+		return 203
 	fi
 	argue-store() { # $1 - value
 		if ((${#varname})); then
@@ -118,15 +134,16 @@ argue() {
 	}
 	local checked
 	argue-check() { # $1 - value
+		checked=''
 		if ((${#pattern})) && [[ ! $1 =~ ^$pattern$ ]]; then
-			checked="invalid value; expected ${measure+$measure=}$pattern"
+			checked="invalid value; expected ${measure+$measure=}/$pattern/"
 			return 1
 		fi
 		if ((${#checker})); then
 			checked=$(${checker//\{\}/$1} 2>&1)
 			return $?
 		fi
-		checked="${checked-$1}"
+		checked="${checked:-$1}"
 	}
 	local entered
 	argue-enter() {
@@ -203,4 +220,32 @@ argue() {
 		eval "$command"
 	fi
 	return 0
+}
+
+# install auto completion
+argue-setup()
+{
+if [[ -z $ARGUE_OFFER ]]; then
+	echo 'Unable to install auto completion: feature is disabled!'
+	echo 'Please, declare: argue internal --offer or offer.'
+	return 1
+fi
+local command=$(basename $0)
+local handler="_${command//[[:punct:]]/_}_completion"
+local include="/usr/share/bash-completion/completions/$command"
+if [[ ! -w $include ]]; then
+	echo 'Unable to install auto completion: permission denied!'
+	echo 'Please, run with sudo.'
+	return 1
+fi
+cat > $include << EOT
+$handler() {
+  local IFS=\$'\n' cur
+  _get_comp_words_by_ref -n = cur
+  COMPREPLY=(\$($(readlink -f $0) ${ARGUE_OFFER/|*} \$cur))
+}
+complete -o nospace -F $handler $command
+EOT
+echo "Auto completion successfully installed!"
+return 0
 }

@@ -29,19 +29,21 @@ age() {
 	fi
 }
 
-argue internal "--offer|offer" of offer \
+argue internal "offer|--offer" of offer \
 	as 'Print auto completion variants' -- "$@"
-argue internal "-h|--help|help|guide|sos|how|\?" of guide do guide \
+argue internal "guide|--guide|-h|--help|help|\?" of guide do guide \
 	as 'Print this guide' -- "$@"
-argue internal "--usage|usage" of usage \
+argue internal "usage|--usage" of usage \
 	as 'Print short usage' -- "$@"
+argue internal "setup|--setup" of setup \
+	as 'Install auto completion' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username' -- "$@"
 argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password' -- "$@"
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
 	as 'What is your real name?' -- "$@"
-argue required --birthdate of DD.MM.YYYY to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" ? 'check-date {}' \
+argue required --birthdate of 'DD.MM.YYYY|DDMMYYYY' to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" ? 'check-date {}' \
 	as 'When were you born?' -- "$@"
 argue optional --gender to gender ~ "(male|female)" or 'unknown' \
 	as 'How do you identify yourself?' -- "$@"
