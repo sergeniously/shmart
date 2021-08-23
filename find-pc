@@ -4,12 +4,17 @@ source $(dirname $0)/core/argue.sh
 source $(dirname $0)/core/progress.sh
 
 guide() {
-	echo -e "Find personal computer IP addresses by their MAC addresses \ua9 Sergeniously, 2021"
+	echo 'Find personal computer IP addresses by their MAC addresses'
+	echo -e "\ua9 Sergeniously, 2021"
 	echo 'Guide:'
 }
 
+argue internal "--offer|offer" of offer \
+	as 'Print auto completion variants' -- $@
 argue internal "-h|--help|help|\?" of guide do guide \
 	as 'Print this guide' -- $@
+argue internal "--usage|usage" of usage \
+	as 'Print short usage' -- $@
 argue required --mac ... of MAC to macs[] ~ "([a-fA-F0-9]{1,2}:){5}[a-fA-F0-9]{1,2}" \
 	as 'MAC addresses to find' -- $@
 argue optional --net of IP to net ~ "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" or '192.168.111' \

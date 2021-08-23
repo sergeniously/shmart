@@ -8,7 +8,10 @@
 #  @argname: a pattern of an argument name, e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
-#   * internal: describes arguments of guide and usage features
+#   * internal: describes arguments to cause embedded features depended on @measure
+#    * @measure=guide: causes printing an argument's guide
+#    * @measure=usage: causes printing an argument's usage
+#    * @measure=offer: causes printing an argument's variants for auto completion
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
@@ -20,10 +23,15 @@
 #  @certain: a certain value which will be stored if an argument is specified
 #   * it is used only if a  validation pattern is not specified
 #  @default: a default value which will be stored if an argument is not specified
-#  @measure: a unit of an argument value
+#  @measure: a unit/type of an argument value
 #   * set it as PASSWORD to mask a value with asterisks on input
 #  @command: a command which will be performed if an argument is specified
 #  @comment: a description of an argument
+# Return:
+#  200 if an argument's guide was printed
+#  201 if an argument's usage was printed
+#  202 if an argument's completion variants were printed
+#  1 on failure; 0 on success
 # Examples:
 #  argue internal "-h|--help|help" of guide do guide as 'Print this guide' -- $@
 #  argue internal "--usage|usage" of usage as 'Print short usage' -- $@
@@ -35,6 +43,7 @@
 # TODO:
 #  + substitute @default value with 'no' for arguments without @pattern during input
 #  + implement [eg example] option to print it on usage instead of varname
+#  + try to detect redundant arguments and store them into argue_trash
 
 argue() {
 	local meaning argname several measure
@@ -59,16 +68,17 @@ argue() {
 		case $measure in
 			guide) argue_guide="$argname";;
 			usage) argue_usage="$argname";;
+			offer) argue_offer="$argname";;
 		esac
 	fi
-	# print argument
+	# print argument guide
 	if [[ -n $argue_guide && $1 =~ ^($argue_guide)$ ]]; then
 		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
 		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
 		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
 	fi
-	# usage argument
+	# print argument usage
 	if [[ -n $argue_usage && $1 =~ ^($argue_usage)$ ]]; then
 		if [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
@@ -78,9 +88,26 @@ argue() {
 		fi
 		return 201
 	fi
+	# print auto completion variants for $2
+	if [[ -n $argue_offer && $1 =~ ^($argue_offer)$ ]]; then
+		if [[ $measure != offer ]]; then
+			for argword in ${argname//|/ }; do
+				if [[ $argword == $2 ]]; then
+					printf -- "$argword"; ((${#pattern}||${#checker})) && printf '='; echo; break
+				elif [[ $argword =~ ^$2 ]]; then
+					printf -- "$argword"; ((${#pattern}||${#checker})) || printf ' '; echo
+				fi
+			done
+		elif [[ $2 == install && -n $3 ]]; then
+			command=$(basename $0); local handler="_${command//[[:punct:]]/_}_completion"
+			echo -e "${handler}() {\n COMPREPLY=(\$($(readlink -f $0) --offer \${COMP_WORDS[\$COMP_CWORD]}))\n}" >> $3
+			echo "complete -o nospace -F ${handler} $command" >> $3
+		fi
+		return 202
+	fi
 	argue-store() { # $1 - value
 		if ((${#varname})); then
-			if [[ ${varname//[^\[\]]/} == '[]' ]]; then
+			if [[ ${varname: -2} == '[]' ]]; then
 				((${#1})) && eval "${varname%[]}+=('$1')"
 			else
 				eval "${varname%[]}='$1'"
@@ -127,7 +154,7 @@ argue() {
 		echo "${comment-${varname-$argname}} <${measure-${pattern-($consent|$dissent)}}>${default+ (default: $default)}"
 		while printf "%3s$meaning > " && argue-enter; do
 			if ((${#entered})); then
-				if ((${#pattern})); then
+				if ((${#pattern}||${#checker})); then
 					if ! argue-check "$entered"; then
 						echo " # $checked!" && continue
 					fi
@@ -153,7 +180,7 @@ argue() {
 			if [[ -z $several && $counter -gt 0 ]]; then
 				echo "$1 # duplicate argument!"; exit 1
 			fi
-			if !((${#pattern})); then
+			if !((${#pattern}||${#checker})); then
 				argue-store "${certain-$1}"
 			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
 				echo "$1 # argument needs a value!"; exit 1

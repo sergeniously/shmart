@@ -29,6 +29,8 @@ age() {
 	fi
 }
 
+argue internal "--offer|offer" of offer \
+	as 'Print auto completion variants' -- "$@"
 argue internal "-h|--help|help|guide|sos|how|\?" of guide do guide \
 	as 'Print this guide' -- "$@"
 argue internal "--usage|usage" of usage \
