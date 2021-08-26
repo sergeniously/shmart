@@ -43,6 +43,8 @@ argue optional --selection do get-selection \
 	as 'Translate selected expression' -- "$@"
 argue optional --expression of EXPRESSION to expression ~ ".+" \
 	as 'Translate supplied expression' -- "$@"
+argue optional --language of LANGUAGE to language ~ "[a-z]{2}" or ru \
+	as 'Language to translate to' -- "$@"
 argue optional --memorize to do_memorize = true or false \
 	as 'Memorize translated word to vocabulary' -- "$@"
 argue optional --notify to do_notify = true or false \
@@ -54,7 +56,7 @@ if [[ -z $expression ]]; then
 	exit 1
 fi
 
-link="http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&dt=qca&dt=bd&dj=1&q=$expression"
+link="http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$language&dt=t&dt=qca&dt=bd&dj=1&q=$expression"
 json=$(wget -U "Mozilla/5.0" -qO - "$link")
 
 correction=$(echo $json | jq -r '.sentences[0].orig')
