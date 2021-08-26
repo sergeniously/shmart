@@ -10,8 +10,8 @@ guide() {
 }
 
 get-selection() {
-	expression=$(xsel -o);
-	expression="${expression%\*}"
+	local expression=$(xsel -o);
+	echo "${expression%\*}"
 }
 
 install() {
@@ -39,7 +39,7 @@ argue internal "usage|--usage" of usage \
 	as 'Print short usage' -- "$@"
 argue internal "setup|install|--install" of setup do install \
 	as 'Install auto completion and other dependancies' -- "$@"
-argue optional --selection do get-selection \
+argue optional --selection to do_selection = true or false \
 	as 'Translate selected expression' -- "$@"
 argue optional --expression of EXPRESSION to expression ~ ".+" \
 	as 'Translate supplied expression' -- "$@"
@@ -51,6 +51,9 @@ argue optional --notify to do_notify = true or false \
 	as 'Show translation as a system notification' -- "$@"
 (($? >= 200)) && echo && exit
 
+if $do_selection; then
+	expression=$(get-selection)
+fi
 if [[ -z $expression ]]; then
 	echo "Expression is empty"
 	exit 1

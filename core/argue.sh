@@ -233,7 +233,7 @@ fi
 local command=$(basename $0)
 local handler="_${command//[[:punct:]]/_}_completion"
 local include="/usr/share/bash-completion/completions/$command"
-if [[ ! -w $include ]]; then
+if ! [[ -f $include && -w $include || -w $(dirname $include) ]]; then
 	echo 'Unable to install auto completion: permission denied!'
 	echo 'Please, run with sudo.'
 	return 1
