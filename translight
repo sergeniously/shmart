@@ -1,0 +1,83 @@
+#!/bin/bash
+
+source $(dirname $0)/core/argue.sh
+
+guide() {
+	echo 'Translate somewhere selected text or particularly supplied text by Google Translate.'
+	echo 'Optionally show translation as a system notification and save translated word to vocabulary file.'
+	echo -e "\ua9 Sergeniously, 2021."
+	echo 'Guide:'
+}
+
+get-selection() {
+	expression=$(xsel -o);
+	expression="${expression%\*}"
+}
+
+install() {
+	apt install -y jq wget xsel libnotify-bin
+	wget https://translate.google.ru/favicon.ico -O $icon_path
+	exit $?
+}
+
+join() {
+	local splitter=$1; shift
+	for ((word = 0; word <= $#; word++)); do
+		(($word > 0)) && printf "$splitter"
+		printf "$1"; shift
+	done
+}
+
+icon_path="/usr/share/icons/google.translate.ico"
+vocabulary=$HOME/vocabulary.txt
+
+argue internal "offer|--offer" of offer \
+	as 'Print completion variants' -- "$@"
+argue internal "guide|help|--help|-h" of guide do guide \
+	as 'Print detailed guide' -- "$@"
+argue internal "usage|--usage" of usage \
+	as 'Print short usage' -- "$@"
+argue internal "setup|install|--install" of setup do install \
+	as 'Install auto completion and other dependancies' -- "$@"
+argue optional --selection do get-selection \
+	as 'Translate selected expression' -- "$@"
+argue optional --expression of EXPRESSION to expression ~ ".+" \
+	as 'Translate supplied expression' -- "$@"
+argue optional --memorize to do_memorize = true or false \
+	as 'Memorize translated word to vocabulary' -- "$@"
+argue optional --notify to do_notify = true or false \
+	as 'Show translation as a system notification' -- "$@"
+(($? >= 200)) && echo && exit
+
+if [[ -z $expression ]]; then
+	echo "Expression is empty"
+	exit 1
+fi
+
+link="http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&dt=qca&dt=bd&dj=1&q=$expression"
+json=$(wget -U "Mozilla/5.0" -qO - "$link")
+
+correction=$(echo $json | jq -r '.sentences[0].orig')
+translation=$(echo $json | jq -r '.sentences[0].trans')
+translations=($(echo $json | jq -r '.dict[].terms[]' 2> /dev/null))
+
+if ((${#translations[@]})); then
+	translation="$(join ', ' "${translations[@]}")"
+fi
+
+if $do_memorize && [[ $(echo "$correction" | wc -w) -eq 1 && ${#correction} -gt 2 ]]; then
+	echo "${correction,,}: ${translation,,}" >> $vocabulary
+	sort $vocabulary --unique --output=$vocabulary
+fi
+
+if $do_notify; then
+	read_speed=500 # ms per word
+	word_count=$(echo "$translation" | wc -w)
+	timeout=$((word_count * read_speed))
+	notify-send --expire-time=$timeout --icon="$icon_path" "$correction" "$translation"
+else
+	if [[ $correction != $expression ]]; then
+		echo "* $correction"
+	fi
+	echo "> $translation"
+fi
