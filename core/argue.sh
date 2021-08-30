@@ -11,10 +11,11 @@
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
-#   * internal: describes arguments to cause embedded features depended on @measure
+#   * internal: describes arguments to enable embedded features depended on @measure
 #    * @measure=guide: causes printing an argument's guide
 #    * @measure=usage: causes printing an argument's usage
 #    * @measure=offer: causes printing an argument's variants for auto completion
+#    * also, internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
@@ -71,21 +72,17 @@ argue() {
 	esac done
 	if [[ $meaning == internal ]]; then
 		case $measure in
-			guide) ARGUE_GUIDE="$argname";;
-			usage) ARGUE_USAGE="$argname";;
-			offer) ARGUE_OFFER="$argname";;
-			setup) ARGUE_SETUP="$argname";;
+			guide|usage|offer)
+				ARGUE[$measure]="$argname";;
+			# others) user defined internal feature
 		esac
 	fi
-	# print argument guide
-	if [[ -n $ARGUE_GUIDE && $1 =~ ^($ARGUE_GUIDE)$ ]]; then
-		[[ $1 =~ ^($argname)$ && -n $command ]] && eval "$command"
+	argue-guide() { # print argument guide
 		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
 		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
-	fi
-	# print argument usage
-	if [[ -n $ARGUE_USAGE && $1 =~ ^($ARGUE_USAGE)$ ]]; then
+	}
+	argue-usage() { # print argument usage
 		if [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argname/|*/}${pattern+=${measure-$varname}}$several"
@@ -93,14 +90,13 @@ argue() {
 			echo -n "$(basename $0) "
 		fi
 		return 201
-	fi
-	# print auto completion variants for $2
-	if [[ -n $ARGUE_OFFER && $1 =~ ^($ARGUE_OFFER)$ ]]; then
+	}
+	argue-offer() { # print auto completion variants for $1
 		if [[ $measure != offer ]]; then
 			for argword in ${argname//|/ }; do
-				if [[ $argword =~ ^$2 ]]; then
+				if [[ $argword =~ ^$1 ]]; then
 					printf -- "$argword"; ((${#pattern}||${#checker})) && echo '=' || echo ' '
-				elif [[ $2 =~ ^$argword=(.*)$ ]]; then
+				elif [[ $1 =~ ^$argword=(.*)$ ]]; then
 					local payload=${BASH_REMATCH[1]} variant
 					if [[ $pattern =~ ^\([|[:alnum:]]+\)$ ]]; then
 						for variant in ${pattern//[(|)]/ }; do
@@ -113,14 +109,13 @@ argue() {
 			done
 		fi
 		return 202
-	fi
-	# install auto completion and run additional command
-	if [[ -n $ARGUE_SETUP && $1 =~ ^($ARGUE_SETUP)$ ]]; then
-		if [[ $measure == setup ]] && argue-setup && [[ -n $command ]]; then
-			eval "$command"
-		fi
-		return 203
-	fi
+	}
+	local feature
+	for feature in ${!ARGUE[@]}; do
+		[[ $1 =~ ^(${ARGUE[$feature]})$ ]] || continue
+		[[ $measure == $feature && -n $command ]] && eval "$command"
+		argue-$feature $2; return $?
+	done
 	argue-store() { # $1 - value
 		if ((${#varname})); then
 			if [[ ${varname: -2} == '[]' ]]; then
@@ -222,13 +217,15 @@ argue() {
 	return 0
 }
 
+declare -A ARGUE
+
 # install auto completion
 argue-setup()
 {
-if [[ -z $ARGUE_OFFER ]]; then
+if [[ -z ${ARGUE[offer]} ]]; then
 	echo 'Unable to install auto completion: feature is disabled!'
-	echo 'Please, declare: argue internal --offer or offer.'
-	return 1
+	echo 'Please, declare: argue internal --offer of offer'
+	exit 1
 fi
 local command=$(basename $0)
 local handler="_${command//[[:punct:]]/_}_completion"
@@ -236,16 +233,16 @@ local include="/usr/share/bash-completion/completions/$command"
 if ! [[ -f $include && -w $include || -w $(dirname $include) ]]; then
 	echo 'Unable to install auto completion: permission denied!'
 	echo 'Please, run with sudo.'
-	return 1
+	exit 1
 fi
 cat > $include << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
-  COMPREPLY=(\$($(readlink -f $0) ${ARGUE_OFFER/|*} \$cur))
+  COMPREPLY=(\$($(readlink -f $0) ${ARGUE[offer]/|*} \$cur))
 }
 complete -o nospace -F $handler $command
 EOT
 echo "Auto completion successfully installed!"
-return 0
+exit 0
 }

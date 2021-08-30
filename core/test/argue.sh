@@ -35,7 +35,7 @@ argue internal "guide|--guide|-h|--help|help|\?" of guide do guide \
 	as 'Print this guide' -- "$@"
 argue internal "usage|--usage" of usage \
 	as 'Print short usage' -- "$@"
-argue internal "setup|--setup" of setup \
+argue internal "setup|--setup" do argue-setup \
 	as 'Install auto completion' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username' -- "$@"

@@ -15,8 +15,10 @@ get-selection() {
 }
 
 install() {
-	apt install -y jq wget xsel libnotify-bin
-	wget https://translate.google.ru/favicon.ico -O $icon_path
+	if (argue-setup); then
+		apt install -y jq wget xsel libnotify-bin
+		wget https://translate.google.ru/favicon.ico -O $icon_path
+	fi
 	exit $?
 }
 
