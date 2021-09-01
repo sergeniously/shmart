@@ -33,25 +33,27 @@ join() {
 icon_path="/usr/share/icons/google.translate.ico"
 vocabulary=$HOME/vocabulary.txt
 
-argue internal "offer|--offer" of offer \
-	as 'Print completion variants' -- "$@"
-argue internal "guide|help|--help|-h" of guide do guide \
-	as 'Print detailed guide' -- "$@"
-argue internal "usage|--usage" of usage \
-	as 'Print short usage' -- "$@"
-argue internal "setup|install|--install" of setup do install \
-	as 'Install auto completion and other dependancies' -- "$@"
+argue -- "$@"
+argue internal offer of offer \
+	as 'Print completion variants'
+argue internal "guide|help|--help|-h|\?" of guide do guide \
+	as 'Print detailed guide'
+argue internal usage of usage \
+	as 'Print short usage'
+argue internal "setup|install" of setup do install \
+	as 'Install auto completion and other dependancies'
 argue optional --selection to do_selection = true or false \
-	as 'Translate selected expression' -- "$@"
+	as 'Translate selected expression'
 argue optional --expression of EXPRESSION to expression ~ ".+" \
-	as 'Translate supplied expression' -- "$@"
+	as 'Translate supplied expression'
 argue optional --language of LANGUAGE to language ~ "[a-z]{2}" or ru \
-	as 'Language to translate to' -- "$@"
+	as 'Language to translate to'
 argue optional --memorize to do_memorize = true or false \
-	as 'Memorize translated word to vocabulary' -- "$@"
+	as 'Memorize translated word to vocabulary'
 argue optional --notify to do_notify = true or false \
-	as 'Show translation as a system notification' -- "$@"
+	as 'Show translation as a system notification'
 (($? >= 200)) && echo && exit
+argue %% 'Unknown arguments {} will be ignored'
 
 if $do_selection; then
 	expression=$(get-selection)

@@ -5,8 +5,11 @@
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
-#  argue required|optional|internal argname [of measure] [...] [to varname[[]]]
-#        [[~ pattern] [? checker]] | [= certain] [or default] [do command] [as comment] -- "$@"
+#  argue -- "$@" # initialize internal array to parse
+#  argue required|optional|internal argname [of measure] [...] \
+#        [to varname[[]]] [[? checker] [~ pattern]] | [= certain] [or default] \
+#        [do command] [as comment] [// comment...]
+#  .....
 # Where:
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
@@ -40,23 +43,23 @@
 #  202 if an argument's completion variants were printed
 #  1 on failure; 0 on success
 # Examples:
-#  argue internal "-h|--help|help" of guide do guide as 'Print this guide' -- $@
-#  argue internal "--usage|usage" of usage as 'Print short usage' -- $@
-#  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username' -- $@
-#  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password' -- $@
-#  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?' -- $@
-#  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
-#  argue optional --robot to robot = yes or no as 'Are you a robot?' -- $@
+#  argue -- "$@"
+#  argue internal "-h|--help|help" of guide do guide as 'Print this guide'
+#  argue internal "--usage|usage" of usage as 'Print short usage'
+#  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username'
+#  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password'
+#  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?'
+#  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
+#  argue optional --robot to robot = yes or no as 'Are you a robot?'
 # TODO:
-#  + substitute @default value with 'no' for arguments without @pattern during input
 #  + implement [eg example] option to print it on usage instead of varname
-#  + try to detect redundant arguments by [%% varname] and store them into @varname
 
 argue() {
 	local meaning argname several measure
 	local varname certain default command
 	local checkers=() comment
 	while (("$#")); do case $1 in
+		...) several=$1; shift;;
 		optional|required|internal)
 			meaning=$1; argname=$2; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
@@ -67,8 +70,13 @@ argue() {
 		or) default=$2; shift 2;;
 		do) command=$2; shift 2;;
 		as) comment=$2; shift 2;;
-		...) several=$1; shift;;
-		--) shift; break;;
+		//) shift; comment="$@"; break;;
+		--) shift
+			ARGUE_FIRST=$1; ARGUE_COUNT=$#
+			ARGUE_ARRAY=("$@"); return 0;;
+		%%) shift; local remains=${#ARGUE_ARRAY[@]}
+			(($remains && "$#")) && echo "${@//\{\}/${ARGUE_ARRAY[@]}}"
+			return $remains;;
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
 	if [[ $meaning == internal ]]; then
@@ -94,7 +102,7 @@ argue() {
 		if [[ $measure != offer ]] && local variant; then
 			for variant in ${argname//|/ }; do
 				if [[ $variant =~ ^$1 ]]; then
-					((${#checkers[@]})) && echo "$variant=" || echo "$variant "
+					((${#checkers[@]})) && printf -- "$variant=" || printf -- "$variant "; echo
 				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
 					for checker in "${checkers[@]}"; do [[ $checker =~ ^\{(.+)\}$ ]] && break; done
 					((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
@@ -106,10 +114,10 @@ argue() {
 		return 202
 	}
 	local feature
-	for feature in ${!ARGUE[@]}; do
-		[[ $1 =~ ^(${ARGUE[$feature]})$ ]] || continue
+	((${#ARGUE_FIRST})) && for feature in ${!ARGUE[@]}; do
+		[[ $ARGUE_FIRST =~ ^(${ARGUE[$feature]})$ ]] || continue
 		[[ $measure == $feature && -n $command ]] && eval "$command"
-		argue-$feature $2; return $?
+		argue-$feature ${ARGUE_ARRAY[1]}; return $?
 	done
 	argue-store() { # $1 - value
 		if ((${#varname})); then
@@ -171,7 +179,7 @@ argue() {
 	}
 	local counter=0
 	# enter argument
-	if !(("$#")) && [[ $meaning != internal ]]; then
+	if !(($ARGUE_COUNT)) && [[ $meaning != internal ]]; then
 		local consent="y|yes" dissent="n|no"
 		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
 		((${#checkers})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
@@ -184,14 +192,16 @@ argue() {
 					fi
 					argue-store "$checked"; (( counter++ ))
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
-					echo " # invalid value; expected ($consent|$dissent)" && continue
+					echo " # invalid value; expected ($consent|$dissent)"; continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
 					argue-store "$certain"; (( counter++ ))
 				else
 					argue-store "$default"
 				fi
 			elif [[ $counter -eq 0 ]]; then
-				[[ $meaning == required ]] && echo "# empty value of required argument" && continue
+				if [[ $meaning == required ]]; then
+					echo "# empty value of required argument"; continue
+				fi
 				argue-store "$default"
 			fi
 			meaning=optional; echo "${entered:+ # OK}"
@@ -199,6 +209,7 @@ argue() {
 		done; echo
 	fi
 	# parse argument
+	set -- "${ARGUE_ARRAY[@]}"; ARGUE_ARRAY=()
 	while (("$#")); do
 		if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
 			if [[ -z $several && $counter -gt 0 ]]; then
@@ -214,6 +225,8 @@ argue() {
 				argue-store "$checked"
 			fi
 			(( counter++ ))
+		else
+			ARGUE_ARRAY+=("$1")
 		fi
 		shift
 	done
@@ -229,6 +242,7 @@ argue() {
 	return 0
 }
 
+# array to store internal features
 declare -A ARGUE
 
 # install auto completion

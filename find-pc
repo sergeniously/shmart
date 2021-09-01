@@ -9,25 +9,27 @@ guide() {
 	echo 'Guide:'
 }
 
-argue internal "offer|--offer" of offer \
-	as 'Print auto completion variants' -- $@
-argue internal "guide|--guide|-h|--help|help|\?" of guide do guide \
-	as 'Print this guide' -- $@
-argue internal "usage|--usage" of usage \
-	as 'Print short usage' -- $@
-argue internal "setup|--setup" do argue-setup \
-	as 'Install auto completion' -- $@
+argue -- "$@"
+argue internal offer of offer \
+	as 'Print auto completion variants'
+argue internal "guide|-h|--help|help|\?" of guide do guide \
+	as 'Print this guide'
+argue internal usage of usage \
+	as 'Print short usage'
+argue internal setup do argue-setup \
+	as 'Install auto completion'
 argue required --mac ... of MAC to macs[] ~ "([a-fA-F0-9]{1,2}:){5}[a-fA-F0-9]{1,2}" \
-	as 'MAC addresses to find' -- $@
+	as 'MAC addresses to find'
 argue optional --net of IP to net ~ "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" or '192.168.111' \
-	as 'IP prefix of network to scan' -- $@
+	as 'IP prefix of network to scan'
 argue optional --min of number to min ? '[0..255]' or 0 \
-	as 'Minimal position to start' -- $@
+	as 'Minimal position to start'
 argue optional --max of number to max ? '[0..255]' or 255 \
-	as 'Maximal position to stop' -- $@
+	as 'Maximal position to stop'
 argue optional --no-scan to do_scan = false or true \
-	as 'Proceed without scanning?' -- $@
+	as 'Proceed without scanning?'
 [[ $? -ge 200 ]] && echo && exit
+argue %% 'Unknown arguments {} will be ignored'
 
 if $do_scan; then
 	for (( ip = $min; ip <= $max; ip++ )); do
