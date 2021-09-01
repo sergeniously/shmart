@@ -4,8 +4,8 @@ source $(dirname $0)/../argue.sh
 
 guide() {
     echo 'About: a demonstration script for argue function'
-    echo "Usage: $(basename $0) [options] # run without arguments to input"
-    echo 'Guide:'
+    echo "Usage: $(basename $0) [options] # run without options to input"
+    echo 'Options:'
 }
 
 check-date() {
@@ -29,13 +29,13 @@ age() {
 	fi
 }
 
-argue internal "offer|--offer" of offer \
+argue internal offer of offer \
 	as 'Print auto completion variants' -- "$@"
-argue internal "guide|--guide|-h|--help|help|\?" of guide do guide \
+argue internal "guide|help|-h|--help|\?" of guide do guide \
 	as 'Print this guide' -- "$@"
-argue internal "usage|--usage" of usage \
+argue internal usage of usage \
 	as 'Print short usage' -- "$@"
-argue internal "setup|--setup" do argue-setup \
+argue internal setup do argue-setup \
 	as 'Install auto completion' -- "$@"
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username' -- "$@"
@@ -43,10 +43,13 @@ argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password' -- "$@"
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
 	as 'What is your real name?' -- "$@"
-argue required --birthdate of 'DD.MM.YYYY|DDMMYYYY' to birthdate ~ "[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}" ? 'check-date {}' \
+argue required --birthdate of 'DD.MM.YYYY|DDMMYYYY' to birthdate \
+	? "/[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}/" ? '(check-date {})' \
 	as 'When were you born?' -- "$@"
-argue optional --gender to gender ~ "(male|female)" or 'unknown' \
+argue optional --gender to gender of GENDER ? "{male,female}" or unknown \
 	as 'How do you identify yourself?' -- "$@"
+argue optional --height of centimeters to height ? '[50..300]' or unknown \
+	as 'How long is your body?' -- "$@"
 argue required "--lang|--language" ... of LANGUAGE to languages[] ~ "[a-z]+" \
 	as 'Which languages do you speak?' -- "$@"
 argue optional --books to interests[] = books \
@@ -67,6 +70,7 @@ printf "%10s: %s\n" \
 	'Real name' "$realname" \
 	'Birthdate' "$birthdate" \
 	'Age' "~ $(age "$birthdate") y.o." \
+	'Height' "$height cm" \
 	'Gender' "$gender" \
 	"Languages" "${languages[*]}" \
 	"Interests" "${interests[*]}"

@@ -83,8 +83,6 @@ if $do_notify; then
 	timeout=$((word_count * read_speed))
 	notify-send --expire-time=$timeout --icon="$icon_path" "$correction" "$translation"
 else
-	if [[ $correction != $expression ]]; then
-		echo "* $correction"
-	fi
+	[[ $correction != $expression ]] && echo "* $correction:" || echo "$expression:"
 	echo "> $translation"
 fi

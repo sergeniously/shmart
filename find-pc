@@ -21,9 +21,9 @@ argue required --mac ... of MAC to macs[] ~ "([a-fA-F0-9]{1,2}:){5}[a-fA-F0-9]{1
 	as 'MAC addresses to find' -- $@
 argue optional --net of IP to net ~ "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" or '192.168.111' \
 	as 'IP prefix of network to scan' -- $@
-argue optional --min of number to min ~ "[0-9]+" or 0 \
+argue optional --min of number to min ? '[0..255]' or 0 \
 	as 'Minimal position to start' -- $@
-argue optional --max of number to max ~ "[0-9]+" or 255 \
+argue optional --max of number to max ? '[0..255]' or 255 \
 	as 'Maximal position to stop' -- $@
 argue optional --no-scan to do_scan = false or true \
 	as 'Proceed without scanning?' -- $@

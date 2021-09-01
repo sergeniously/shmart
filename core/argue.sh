@@ -5,27 +5,30 @@
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
-#  argue required|optional|internal argname [of measure] [...] [to varname[[]]
-#        [[~ pattern] [? checker]] | [= certain]] [or default] [do command] [as comment] -- "$@"
+#  argue required|optional|internal argname [of measure] [...] [to varname[[]]]
+#        [[~ pattern] [? checker]] | [= certain] [or default] [do command] [as comment] -- "$@"
 # Where:
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
 #   * internal: describes arguments to enable embedded features depended on @measure
-#    * @measure=guide: causes printing an argument's guide
-#    * @measure=usage: causes printing an argument's usage
-#    * @measure=offer: causes printing an argument's variants for auto completion
-#    * also, internal arguments are not available for input
+#   ** @measure=guide: causes printing an argument's guide
+#   ** @measure=usage: causes printing an argument's usage
+#   ** @measure=offer: causes printing an argument's variants for auto completion
+#   ** also, internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
-#  @pattern: a regular expression to validate a value
-#  @checker: a command to validate a value, e.g. 'test -f {}'
-#   * the string {} is replaced by a specified value of an argument
-#   * if a command succeeds its non-empty echo will be considered as a corrected value
-#   * if a command fails its echo will be displayed as en error
+#  @checker: a validator for checking a value in following formats:
+#   * /pattern/ - describes a regular expression
+#   * (command) - describes a command, e.g. test -f {}, where {} is replaced by a provided value
+#   ** if a command succeeds its non-empty echo will be considered as a corrected value
+#   ** if a command fails its echo will be displayed as en error
+#   * {one,two,...} - describes a list of possible values separated by comma
+#   * [min..max] - describes a minimum and a maximum number of a value
+#  @pattern: a regular expression to validate a value (alias for ? /pattern/)
 #  @certain: a certain value which will be stored if an argument is specified
-#   * it is used only if a  validation pattern is not specified
+#   * it is used only if no checker was specified
 #  @default: a default value which will be stored if an argument is not specified
 #  @measure: a unit/type of an argument value
 #   * set it as PASSWORD to mask a value with asterisks on input
@@ -35,7 +38,6 @@
 #  200 if an argument's guide was printed
 #  201 if an argument's usage was printed
 #  202 if an argument's completion variants were printed
-#  203 if auto completion was installed
 #  1 on failure; 0 on success
 # Examples:
 #  argue internal "-h|--help|help" of guide do guide as 'Print this guide' -- $@
@@ -46,21 +48,20 @@
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?' -- $@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?' -- $@
 # TODO:
-#  + support specifying a set of checkers by ?, where /../ - regular expression, (..) - command, [] - list, etc
 #  + substitute @default value with 'no' for arguments without @pattern during input
 #  + implement [eg example] option to print it on usage instead of varname
-#  + try to detect redundant arguments and store them into argue_trash
+#  + try to detect redundant arguments by [%% varname] and store them into @varname
 
 argue() {
 	local meaning argname several measure
-	local varname pattern checker certain
-	local default command comment
+	local varname certain default command
+	local checkers=() comment
 	while (("$#")); do case $1 in
 		optional|required|internal)
 			meaning=$1; argname=$2; shift 2;;
+		 ~) checkers+=("/$2/"); shift 2;;
+		\?) checkers+=("$2"); shift 2;;
 		to) varname=$2; shift 2;;
-		 ~) pattern=$2; shift 2;;
-		\?) checker=$2; shift 2;;
 		 =) certain=$2; shift 2;;
 		of) measure=$2; shift 2;;
 		or) default=$2; shift 2;;
@@ -71,40 +72,34 @@ argue() {
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
 	if [[ $meaning == internal ]]; then
-		case $measure in
-			guide|usage|offer)
-				ARGUE[$measure]="$argname";;
-			# others) user defined internal feature
+		case $measure in guide|usage|offer)
+			ARGUE[$measure]="$argname";;
 		esac
 	fi
 	argue-guide() { # print argument guide
-		printf "%2s${argname//|/, }${pattern+=${measure-$pattern}${several}${default+ (default: '$default')}}\n"
+		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}}${several}${default+ (default: '$default')}\n"
 		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
 	}
 	argue-usage() { # print argument usage
 		if [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
-				"${argname/|*/}${pattern+=${measure-$varname}}$several"
+				"${argname/|*/}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
 			echo -n "$(basename $0) "
 		fi
 		return 201
 	}
 	argue-offer() { # print auto completion variants for $1
-		if [[ $measure != offer ]]; then
-			for argword in ${argname//|/ }; do
-				if [[ $argword =~ ^$1 ]]; then
-					printf -- "$argword"; ((${#pattern}||${#checker})) && echo '=' || echo ' '
-				elif [[ $1 =~ ^$argword=(.*)$ ]]; then
-					local payload=${BASH_REMATCH[1]} variant
-					if [[ $pattern =~ ^\([|[:alnum:]]+\)$ ]]; then
-						for variant in ${pattern//[(|)]/ }; do
-							[[ $variant =~ ^$payload ]] && echo "$variant "
-						done
-					else
-						echo "$payload "
-					fi
+		if [[ $measure != offer ]] && local variant; then
+			for variant in ${argname//|/ }; do
+				if [[ $variant =~ ^$1 ]]; then
+					((${#checkers[@]})) && echo "$variant=" || echo "$variant "
+				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
+					for checker in "${checkers[@]}"; do [[ $checker =~ ^\{(.+)\}$ ]] && break; done
+					((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
+						[[ $variant =~ ^$written ]] && echo "$variant " || true
+					done || echo "$written "
 				fi
 			done
 		fi
@@ -129,21 +124,36 @@ argue() {
 	}
 	local checked
 	argue-check() { # $1 - value
-		checked=''
-		if ((${#pattern})) && [[ ! $1 =~ ^$pattern$ ]]; then
-			checked="invalid value; expected ${measure+$measure=}/$pattern/"
-			return 1
-		fi
-		if ((${#checker})); then
-			checked=$(${checker//\{\}/$1} 2>&1)
-			return $?
-		fi
+		checked=''; local checker
+		for checker in "${checkers[@]}"; do
+			if [[ $checker =~ ^/(.+)/$ ]]; then
+				if ! [[ $1 =~ ^${BASH_REMATCH[1]}$ ]]; then
+					checked="invalid value; expected pattern $checker"
+					return 1
+				fi
+			elif [[ $checker =~ ^\{(.+)\}$ ]]; then
+				if ! [[ $1 =~ ^(${BASH_REMATCH[1]//,/|})$ ]]; then
+					checked="invalid value; expected one of $checker"
+					return 1
+				fi
+			elif [[ $checker =~ ^\((.+)\)$ ]]; then
+				if ! checked=$(eval ${BASH_REMATCH[1]//\{\}/\'$1\'} 2>&1); then
+					return 1
+				fi
+			elif [[ $checker =~ ^\[(-?[0-9]+)\.+(-?[0-9]+)\]$ ]]; then
+				local minimum=${BASH_REMATCH[1]} maximum=${BASH_REMATCH[2]}
+				if ! [[ $1 =~ ^-?[0-9]+$ && $1 -ge $minimum && $1 -le $maximum ]]; then
+					checked="invalid value; expected number in interval $checker"
+					return 1
+				fi
+			fi
+		done
 		checked="${checked:-$1}"
 	}
 	local entered
 	argue-enter() {
-		local snippet=''; entered=''
-		while read -p "$snippet" -r -s -n1 snippet && ((${#snippet})); do
+		entered=''; local snippet=''
+		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
 				((${#entered})) && snippet=$'\b \b' || snippet=''
 				entered=${entered%?}
@@ -163,10 +173,12 @@ argue() {
 	# enter argument
 	if !(("$#")) && [[ $meaning != internal ]]; then
 		local consent="y|yes" dissent="n|no"
-		echo "${comment-${varname-$argname}} <${measure-${pattern-($consent|$dissent)}}>${default+ (default: $default)}"
+		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
+		((${#checkers})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
+			|| echo "($consent|$dissent) (default: ${dissent##*|})"
 		while printf "%3s$meaning > " && argue-enter; do
 			if ((${#entered})); then
-				if ((${#pattern}||${#checker})); then
+				if ((${#checkers[@]})); then
 					if ! argue-check "$entered"; then
 						echo " # $checked!" && continue
 					fi
@@ -192,7 +204,7 @@ argue() {
 			if [[ -z $several && $counter -gt 0 ]]; then
 				echo "$1 # duplicate argument!"; exit 1
 			fi
-			if !((${#pattern}||${#checker})); then
+			if !((${#checkers[@]})); then
 				argue-store "${certain-$1}"
 			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
 				echo "$1 # argument needs a value!"; exit 1
