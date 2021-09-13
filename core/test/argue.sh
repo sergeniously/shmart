@@ -30,14 +30,10 @@ age() {
 }
 
 argue -- "$@"
-argue internal offer of offer \
-	as 'Print auto completion variants'
-argue internal "guide|help|-h|--help|\?" of guide do guide \
-	as 'Print this guide'
-argue internal usage of usage \
-	as 'Print short usage'
-argue internal setup do argue-setup \
-	as 'Install auto completion'
+argue internal offer of offer								// Display auto completion
+argue internal "guide|help|-h|--help|\?" of guide do guide	// Print this guide
+argue internal usage of usage								// Print short usage
+argue internal setup do argue-setup							// Install auto completion
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username'
 argue required --password of PASSWORD to password ~ ".{6,32}" \

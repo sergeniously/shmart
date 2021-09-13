@@ -1,15 +1,16 @@
 #!/bin/bash
 
 # About:
-#  parse, enter or print arguments like name[=value];
+#  parse, enter, print or complete arguments like name[=value];
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
 #  argue -- "$@" # initialize internal array to parse
-#  argue required|optional|internal argname [of measure] [...] \
-#        [to varname[[]]] [[? checker] [~ pattern]] | [= certain] [or default] \
-#        [do command] [as comment] [// comment...]
+#  argue required|optional|internal argname [...] [of measure] [to|at|@ varname[[]]] \
+#        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
+#        [do command] [as comment] | [// comment...]
 #  .....
+#  argue %% 'Unknown arguments {} will be ignored' # print unknown arguments at {}
 # Where:
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
@@ -32,6 +33,7 @@
 #  @pattern: a regular expression to validate a value (alias for ? /pattern/)
 #  @certain: a certain value which will be stored if an argument is specified
 #   * it is used only if no checker was specified
+#  @fetcher: a command to get a certain value for an argument
 #  @default: a default value which will be stored if an argument is not specified
 #  @measure: a unit/type of an argument value
 #   * set it as PASSWORD to mask a value with asterisks on input
@@ -52,28 +54,34 @@
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 # TODO:
+#  + fix a problem when empty value is set even if default value is not specified 
+#  + implement [if request] option to specify a condition command to enable argument
 #  + implement [eg example] option to print it on usage instead of varname
+
+# array to store internal features
+declare -A ARGUE
 
 argue() {
 	local meaning argname several measure
-	local varname certain default command
-	local checkers=() comment
+	local varname certain fetcher default
+	local checkers=() command comment
 	while (("$#")); do case $1 in
-		...) several=$1; shift;;
+		--) shift
+			ARGUE_FIRST=$1; ARGUE_COUNT=$#
+			ARGUE_ARRAY=("$@"); return 0;;
 		optional|required|internal)
-			meaning=$1; argname=$2; shift 2;;
+			meaning=$1; argname=$2; shift 2
+			[[ $1 == ... ]] && several=$1 && shift;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
-		to) varname=$2; shift 2;;
+		to|at|@) varname=$2; shift 2;;
+		 :) fetcher=$2; shift 2;;
 		 =) certain=$2; shift 2;;
 		of) measure=$2; shift 2;;
 		or) default=$2; shift 2;;
 		do) command=$2; shift 2;;
 		as) comment=$2; shift 2;;
 		//) shift; comment="$@"; break;;
-		--) shift
-			ARGUE_FIRST=$1; ARGUE_COUNT=$#
-			ARGUE_ARRAY=("$@"); return 0;;
 		%%) shift; local remains=${#ARGUE_ARRAY[@]}
 			(($remains && "$#")) && echo "${@//\{\}/${ARGUE_ARRAY[@]}}"
 			return $remains;;
@@ -102,7 +110,7 @@ argue() {
 		if [[ $measure != offer ]] && local variant; then
 			for variant in ${argname//|/ }; do
 				if [[ $variant =~ ^$1 ]]; then
-					((${#checkers[@]})) && printf -- "$variant=" || printf -- "$variant "; echo
+					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
 				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
 					for checker in "${checkers[@]}"; do [[ $checker =~ ^\{(.+)\}$ ]] && break; done
 					((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
@@ -136,7 +144,7 @@ argue() {
 		for checker in "${checkers[@]}"; do
 			if [[ $checker =~ ^/(.+)/$ ]]; then
 				if ! [[ $1 =~ ^${BASH_REMATCH[1]}$ ]]; then
-					checked="invalid value; expected pattern $checker"
+					checked="invalid value; expected a pattern $checker"
 					return 1
 				fi
 			elif [[ $checker =~ ^\{(.+)\}$ ]]; then
@@ -146,12 +154,13 @@ argue() {
 				fi
 			elif [[ $checker =~ ^\((.+)\)$ ]]; then
 				if ! checked=$(eval ${BASH_REMATCH[1]//\{\}/\'$1\'} 2>&1); then
+					checked=${checked:-'failed to check a value'}
 					return 1
 				fi
 			elif [[ $checker =~ ^\[(-?[0-9]+)\.+(-?[0-9]+)\]$ ]]; then
 				local minimum=${BASH_REMATCH[1]} maximum=${BASH_REMATCH[2]}
 				if ! [[ $1 =~ ^-?[0-9]+$ && $1 -ge $minimum && $1 -le $maximum ]]; then
-					checked="invalid value; expected number in interval $checker"
+					checked="invalid value; expected a number in interval $checker"
 					return 1
 				fi
 			fi
@@ -177,6 +186,14 @@ argue() {
 			fi
 		done
 	}
+	local fetched
+	argue-fetch() {
+		if [[ -n $fetcher ]] && ! fetched=$($fetcher 2>&1); then
+			fetched=${fetched:-'failed to fetch a value'}
+			return 1
+		fi
+		fetched=${fetched:-${certain:-$1}}
+	}
 	local counter=0
 	# enter argument
 	if !(($ARGUE_COUNT)) && [[ $meaning != internal ]]; then
@@ -194,7 +211,10 @@ argue() {
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
 					echo " # invalid value; expected ($consent|$dissent)"; continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
-					argue-store "$certain"; (( counter++ ))
+					if ! argue-fetch; then
+						echo " # $fetched!"; exit 1
+					fi
+					argue-store "$fetched"; (( counter++ ))
 				else
 					argue-store "$default"
 				fi
@@ -216,7 +236,10 @@ argue() {
 				echo "$1 # duplicate argument!"; exit 1
 			fi
 			if !((${#checkers[@]})); then
-				argue-store "${certain-$1}"
+				if ! argue-fetch $1; then
+					echo "$1 # $fetched!"; exit 1
+				fi
+				argue-store "$fetched"
 			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
 				echo "$1 # argument needs a value!"; exit 1
 			elif ! argue-check "${BASH_REMATCH[3]}"; then
@@ -242,9 +265,6 @@ argue() {
 	return 0
 }
 
-# array to store internal features
-declare -A ARGUE
-
 # install auto completion
 argue-setup()
 {
@@ -255,13 +275,18 @@ if [[ -z ${ARGUE[offer]} ]]; then
 fi
 local command=$(basename $0)
 local handler="_${command//[[:punct:]]/_}_completion"
-local include="/usr/share/bash-completion/completions/$command"
-if ! [[ -f $include && -w $include || -w $(dirname $include) ]]; then
+local path="${HOME}/bash_completion.d" file="${command}.bash"
+if  [[ ! -d $path ]] && ! mkdir -p $path; then
+	echo 'Unable to install auto completion: cannot create directory!'
+	echo 'Please, try to run with sudo.'
+	exit 1
+fi
+if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
 	echo 'Unable to install auto completion: permission denied!'
 	echo 'Please, run with sudo.'
 	exit 1
 fi
-cat > $include << EOT
+cat > $path/$file << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
