@@ -28,8 +28,10 @@ argue optional --max of number to max ? '[0..255]' or 255 \
 	as 'Maximal position to stop'
 argue optional --no-scan to do_scan = false or true \
 	as 'Proceed without scanning?'
-[[ $? -ge 200 ]] && echo && exit
-argue %% 'Unknown arguments {} will be ignored'
+case $? in
+	100) argue %% 'Unknown arguments {} will be ignored';;
+	2??) echo; exit 0;;
+esac
 
 if $do_scan; then
 	for (( ip = $min; ip <= $max; ip++ )); do

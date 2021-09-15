@@ -47,16 +47,18 @@ if command -v xsel &> /dev/null; then
 	argue optional --selection to expression : get-selection \
 		as 'Translate selected expression'
 fi
-argue optional --expression of EXPRESSION to expression ~ ".+" or "$expression" \
+argue optional --expression of EXPRESSION to expression ~ ".+" \
 	as 'Translate supplied expression'
 argue optional --language of LANGUAGE to language ~ "[a-z]{2}" or ru \
-	as 'Language to translate to'
+	as 'Target language to translate'
 argue optional --memorize to do_memorize = true or false \
-	as 'Memorize translated word to vocabulary'
+	as 'Memorize translated word to vocabulary?'
 argue optional --notify to do_notify = true or false \
-	as 'Show translation as a system notification'
-(($? >= 200)) && echo && exit
-argue %% 'Unknown arguments {} will be ignored'
+	as 'Show translation as a system notification?'
+case $? in
+	100) argue %% 'Unknown arguments {} will be ignored';;
+	2??) echo; exit;;
+esac
 
 if [[ -z $expression ]]; then
 	echo "Expression is empty"

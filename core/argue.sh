@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # About:
-#  parse, enter, print or complete arguments like name[=value];
+#  parse, input, print or complete arguments like name[=value];
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
@@ -10,7 +10,7 @@
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [as comment] | [// comment...]
 #  .....
-#  argue %% 'Unknown arguments {} will be ignored' # print unknown arguments at {}
+#  argue %% "{}" # print unparsed arguments at {} and return their number
 # Where:
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
@@ -27,7 +27,7 @@
 #   * /pattern/ - describes a regular expression
 #   * (command) - describes a command, e.g. test -f {}, where {} is replaced by a provided value
 #   ** if a command succeeds its non-empty echo will be considered as a corrected value
-#   ** if a command fails its echo will be displayed as en error
+#   ** if a command fails its echo will be displayed as an error
 #   * {one,two,...} - describes a list of possible values separated by comma
 #   * [min..max] - describes a minimum and a maximum number of a value
 #  @pattern: a regular expression to validate a value (alias for ? /pattern/)
@@ -38,12 +38,13 @@
 #  @measure: a unit/type of an argument value
 #   * set it as PASSWORD to mask a value with asterisks on input
 #  @command: a command which will be performed if an argument is specified
-#  @comment: a description of an argument
+#  @comment: a description of an argument which will be printed for help
 # Return:
 #  200 if an argument's guide was printed
 #  201 if an argument's usage was printed
-#  202 if an argument's completion variants were printed
-#  1 on failure; 0 on success
+#  202 if an argument's completion caused
+#  100 if there left unparsed arguments
+#  0 if everything is alright
 # Examples:
 #  argue -- "$@"
 #  argue internal "-h|--help|help" of guide do guide as 'Print this guide'
@@ -54,8 +55,7 @@
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 # TODO:
-#  + fix a problem when empty value is set even if default value is not specified 
-#  + implement [if request] option to specify a condition command to enable argument
+#  + implement [if request] option to specify a conditional command to enable argument
 #  + implement [eg example] option to print it on usage instead of varname
 
 # array to store internal features
@@ -63,20 +63,20 @@ declare -A ARGUE
 
 argue() {
 	local meaning argname several measure
-	local varname certain fetcher default
-	local checkers=() command comment
+	local varname certain default command
+	local checkers=() comment # enabled=true
 	while (("$#")); do case $1 in
 		--) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
+		# if) ($2 &> /dev/null) || enabled=false; shift 2;;
 		optional|required|internal)
 			meaning=$1; argname=$2; shift 2
 			[[ $1 == ... ]] && several=$1 && shift;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
 		to|at|@) varname=$2; shift 2;;
-		 :) fetcher=$2; shift 2;;
-		 =) certain=$2; shift 2;;
+		=|:) certain="$1$2"; shift 2;;
 		of) measure=$2; shift 2;;
 		or) default=$2; shift 2;;
 		do) command=$2; shift 2;;
@@ -187,16 +187,18 @@ argue() {
 		done
 	}
 	local fetched
-	argue-fetch() {
-		if [[ -n $fetcher ]] && ! fetched=$($fetcher 2>&1); then
-			fetched=${fetched:-'failed to fetch a value'}
-			return 1
-		fi
-		fetched=${fetched:-${certain:-$1}}
+	argue-fetch() { # $1 - argument
+		case ${certain:0:1} in
+			:) if ! fetched=$(${certain:1}} 2>&1); then
+					fetched=${fetched:-'failed to fetch a value'}
+					return 1
+				fi;;
+			=) fetched=${certain:1};;
+		esac
+		fetched=${fetched:-$1}
 	}
 	local counter=0
-	# enter argument
-	if !(($ARGUE_COUNT)) && [[ $meaning != internal ]]; then
+	argue-input() {
 		local consent="y|yes" dissent="n|no"
 		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
 		((${#checkers})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
@@ -215,52 +217,63 @@ argue() {
 						echo " # $fetched!"; exit 1
 					fi
 					argue-store "$fetched"; (( counter++ ))
-				else
+				elif [[ ${default+x} == x ]]; then
 					argue-store "$default"
 				fi
 			elif [[ $counter -eq 0 ]]; then
 				if [[ $meaning == required ]]; then
 					echo "# empty value of required argument"; continue
+				elif [[ ${default+x} == x ]]; then
+					argue-store "$default"
 				fi
-				argue-store "$default"
 			fi
 			meaning=optional; echo "${entered:+ # OK}"
 			[[ -z $entered || -z $several ]] && break
 		done; echo
-	fi
-	# parse argument
-	set -- "${ARGUE_ARRAY[@]}"; ARGUE_ARRAY=()
-	while (("$#")); do
-		if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
-			if [[ -z $several && $counter -gt 0 ]]; then
-				echo "$1 # duplicate argument!"; exit 1
-			fi
-			if !((${#checkers[@]})); then
-				if ! argue-fetch $1; then
-					echo "$1 # $fetched!"; exit 1
+	}
+	argue-parse() {
+		ARGUE_ARRAY=()
+		while (("$#")); do
+			if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
+				if [[ -z $several && $counter -gt 0 ]]; then
+					echo "$1 # duplicate argument!"; exit 1
 				fi
-				argue-store "$fetched"
-			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
-				echo "$1 # argument needs a value!"; exit 1
-			elif ! argue-check "${BASH_REMATCH[3]}"; then
-				echo "$1 # $checked!"; exit 1
+				if !((${#checkers[@]})); then
+					if ! argue-fetch $1; then
+						echo "$1 # $fetched!"; exit 1
+					fi
+					argue-store "$fetched"
+				elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
+					echo "$1 # argument needs a value!"; exit 1
+				elif ! argue-check "${BASH_REMATCH[3]}"; then
+					echo "$1 # $checked!"; exit 1
+				else
+					argue-store "$checked"
+				fi
+				(( counter++ ))
 			else
-				argue-store "$checked"
+				ARGUE_ARRAY+=("$1")
 			fi
-			(( counter++ ))
-		else
-			ARGUE_ARRAY+=("$1")
-		fi
-		shift
-	done
+			shift
+		done
+	}
+	if (($ARGUE_COUNT)); then
+		argue-parse "${ARGUE_ARRAY[@]}"
+	elif [[ $meaning != internal ]]; then
+		argue-input
+	fi
 	if !(($counter)); then
 		if [[ $meaning == required ]]; then
 			echo "${argname//|/, } # missed required argument!" && exit 1
+		elif [[ ${default+x} == x ]]; then
+			argue-store "$default"
 		fi
-		argue-store "$default"
-		return $?
 	elif ((${#command})); then
 		eval "$command"
+	fi
+	if ((${#ARGUE_ARRAY[@]})); then
+		# there are unparsed arguments
+		return 100
 	fi
 	return 0
 }
@@ -270,7 +283,7 @@ argue-setup()
 {
 if [[ -z ${ARGUE[offer]} ]]; then
 	echo 'Unable to install auto completion: feature is disabled!'
-	echo 'Please, declare: argue internal --offer of offer'
+	echo 'Please, declare: argue internal offer of offer'
 	exit 1
 fi
 local command=$(basename $0)

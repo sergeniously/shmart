@@ -40,37 +40,41 @@ argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password'
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
 	as 'What is your real name?'
+argue optional --gender to gender of GENDER ? "{male,female}" or unknown \
+	as 'How do you identify yourself?'
 argue required --birthdate of 'DD.MM.YYYY|DDMMYYYY' to birthdate \
 	? "/[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}/" ? '(check-date {})' \
 	as 'When were you born?'
-argue optional --gender to gender of GENDER ? "{male,female}" or unknown \
-	as 'How do you identify yourself?'
 argue optional --height of centimeters to height ? '[50..300]' or unknown \
 	as 'How long is your body?'
-argue required "--lang|--language" ... of LANGUAGE to languages[] ~ "[a-z]+" \
+argue optional --weight of kilograms to weight ? '[30..200]' or unknown \
+	as 'How heavy are you?'
+argue required --language ... of LANGUAGE to languages[] ~ "[a-z]+" \
 	as 'Which languages do you speak?'
 argue optional --books to interests[] = books \
 	as 'Do you like reading books?'
 argue optional --music to interests[] = music \
 	as 'Do you like listening music?'
-argue optional --show-password to show_password = yes or no \
+argue optional --show-password to show_password = true or false \
 	as 'Do you wanna see password?'
 argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?'
-[[ $? -ge 200 ]] && echo && exit 0
-if ! argue %% 'There are unknown arguments: {}'; then
-	exit 1
-fi
+
+case $? in
+	100) argue %% 'There are unknown arguments: {}'; exit 1;;
+	2??) echo; exit 0;;
+esac
 
 echo
 echo "Check your profile"
 printf "%10s: %s\n" \
 	'Username' "$username" \
-	'Password' "$([[ $show_password == yes ]] && echo "$password" || echo "${password//?/*}")" \
+	'Password' "$($show_password && echo "$password" || echo "${password//?/*}")" \
 	'Real name' "$realname" \
+	'Gender' "$gender" \
 	'Birthdate' "$birthdate" \
 	'Age' "~ $(age "$birthdate") y.o." \
 	'Height' "$height cm" \
-	'Gender' "$gender" \
-	"Languages" "${languages[*]}" \
-	"Interests" "${interests[*]}"
+	'Weight' "$weight kg" \
+	'Languages' "${languages[*]}" \
+	'Interests' "${interests[*]}"
