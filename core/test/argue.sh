@@ -33,7 +33,7 @@ argue -- "$@"
 argue internal offer of offer								// Display auto completion
 argue internal "guide|help|-h|--help|\?" of guide do guide	// Print this guide
 argue internal usage of usage								// Print short usage
-argue internal setup do argue-setup							// Install auto completion
+argue internal setup of setup do argue-setup				// Install auto completion
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username'
 argue required --password of PASSWORD to password ~ ".{6,32}" \
@@ -61,8 +61,9 @@ argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?'
 
 case $? in
-	100) argue %% 'There are unknown arguments: {}'; exit 1;;
 	2??) echo; exit 0;;
+	100) argue %% 'There are unknown arguments: {}'; exit 1;;
+	0) argue @@ # run parsed commands
 esac
 
 echo

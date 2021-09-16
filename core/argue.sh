@@ -19,6 +19,7 @@
 #   ** @measure=guide: causes printing an argument's guide
 #   ** @measure=usage: causes printing an argument's usage
 #   ** @measure=offer: causes printing an argument's variants for auto completion
+#   ** another value describes custom internal feature
 #   ** also, internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
@@ -58,8 +59,11 @@
 #  + implement [if request] option to specify a conditional command to enable argument
 #  + implement [eg example] option to print it on usage instead of varname
 
-# array to store internal features
-declare -A ARGUE
+declare -A ARGUE_INNER # array of internal features
+declare -a ARGUE_TASKS # array of commands to launch
+declare -a ARGUE_ARRAY # array of arguments to parse
+declare -i ARGUE_COUNT # initial number of arguments
+declare -g ARGUE_FIRST # the first argument to parse
 
 argue() {
 	local meaning argname several measure
@@ -69,7 +73,12 @@ argue() {
 		--) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
-		# if) ($2 &> /dev/null) || enabled=false; shift 2;;
+		%%) shift; local remains=${#ARGUE_ARRAY[@]}
+			(($remains && "$#")) && echo "${@//\{\}/${ARGUE_ARRAY[@]}}"
+			return $remains;;
+		@@) for command in "${ARGUE_TASKS[@]}"; do
+				eval "$command"
+			done; return 0;;
 		optional|required|internal)
 			meaning=$1; argname=$2; shift 2
 			[[ $1 == ... ]] && several=$1 && shift;;
@@ -82,15 +91,11 @@ argue() {
 		do) command=$2; shift 2;;
 		as) comment=$2; shift 2;;
 		//) shift; comment="$@"; break;;
-		%%) shift; local remains=${#ARGUE_ARRAY[@]}
-			(($remains && "$#")) && echo "${@//\{\}/${ARGUE_ARRAY[@]}}"
-			return $remains;;
+		# if) ($2 &> /dev/null) || enabled=false; shift 2;;
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
 	if [[ $meaning == internal ]]; then
-		case $measure in guide|usage|offer)
-			ARGUE[$measure]="$argname";;
-		esac
+		ARGUE_INNER[$measure]="$argname"
 	fi
 	argue-guide() { # print argument guide
 		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}}${several}${default+ (default: '$default')}\n"
@@ -107,8 +112,8 @@ argue() {
 		return 201
 	}
 	argue-offer() { # print auto completion variants for $1
-		if [[ $measure != offer ]] && local variant; then
-			for variant in ${argname//|/ }; do
+		if [[ $measure != offer ]]; then
+			local variant && for variant in ${argname//|/ }; do
 				if [[ $variant =~ ^$1 ]]; then
 					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
 				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
@@ -121,12 +126,15 @@ argue() {
 		fi
 		return 202
 	}
-	local feature
-	((${#ARGUE_FIRST})) && for feature in ${!ARGUE[@]}; do
-		[[ $ARGUE_FIRST =~ ^(${ARGUE[$feature]})$ ]] || continue
-		[[ $measure == $feature && -n $command ]] && eval "$command"
-		argue-$feature ${ARGUE_ARRAY[1]}; return $?
-	done
+	if ((${#ARGUE_FIRST})); then
+		local feature && for feature in ${!ARGUE_INNER[@]}; do
+			[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
+			[[ $measure == $feature && -n $command ]] && eval "$command"
+			case $feature in guide|usage|offer)
+				argue-$feature ${ARGUE_ARRAY[1]};;
+			esac; return $?
+		done
+	fi
 	argue-store() { # $1 - value
 		if ((${#varname})); then
 			if [[ ${varname: -2} == '[]' ]]; then
@@ -269,7 +277,7 @@ argue() {
 			argue-store "$default"
 		fi
 	elif ((${#command})); then
-		eval "$command"
+		ARGUE_TASKS+=("$command")
 	fi
 	if ((${#ARGUE_ARRAY[@]})); then
 		# there are unparsed arguments
@@ -281,7 +289,7 @@ argue() {
 # install auto completion
 argue-setup()
 {
-if [[ -z ${ARGUE[offer]} ]]; then
+if [[ -z ${ARGUE_INNER[offer]} ]]; then
 	echo 'Unable to install auto completion: feature is disabled!'
 	echo 'Please, declare: argue internal offer of offer'
 	exit 1
@@ -303,7 +311,7 @@ cat > $path/$file << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
-  COMPREPLY=(\$($(readlink -f $0) ${ARGUE[offer]/|*} \$cur))
+  COMPREPLY=(\$($(readlink -f $0) ${ARGUE_INNER[offer]/|*} \$cur))
 }
 complete -o nospace -F $handler $command
 EOT
