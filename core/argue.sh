@@ -11,6 +11,7 @@
 #        [do command] [as comment] | [// comment...]
 #  .....
 #  argue %% "{}" # print unparsed arguments at {} and return their number
+#  argue @@ # run parsed commands
 # Where:
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
@@ -56,7 +57,7 @@
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 # TODO:
-#  + implement [if request] option to specify a conditional command to enable argument
+#  + implement [if request] option to specify a conditional command to enable/disable argument
 #  + implement [eg example] option to print it on usage instead of varname
 
 declare -A ARGUE_INNER # array of internal features
@@ -64,6 +65,11 @@ declare -a ARGUE_TASKS # array of commands to launch
 declare -a ARGUE_ARRAY # array of arguments to parse
 declare -i ARGUE_COUNT # initial number of arguments
 declare -g ARGUE_FIRST # the first argument to parse
+declare -A ARGUE_MASKS # array of masking characters
+ARGUE_MASKS[A]="[a-zA-Z]" # alphabet characters
+ARGUE_MASKS[H]="[a-fA-F0-9]" # hex characters
+ARGUE_MASKS[D]="[0-9]" # decimal characters
+ARGUE_MASKS[B]="[0-1]" # binary characters
 
 argue() {
 	local meaning argname several measure
@@ -95,10 +101,12 @@ argue() {
 		 *) echo "argue: invalid parsing option $1"; exit 1;;
 	esac done
 	if [[ $meaning == internal ]]; then
-		ARGUE_INNER[$measure]="$argname"
+		case $measure in guide|usage|offer)
+			ARGUE_INNER[$measure]="$argname";;
+		esac
 	fi
 	argue-guide() { # print argument guide
-		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}}${several}${default+ (default: '$default')}\n"
+		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
 		printf "%6s*${meaning/internal/optional}* ${comment}\n"
 		return 200
 	}
@@ -130,9 +138,7 @@ argue() {
 		local feature && for feature in ${!ARGUE_INNER[@]}; do
 			[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
 			[[ $measure == $feature && -n $command ]] && eval "$command"
-			case $feature in guide|usage|offer)
-				argue-$feature ${ARGUE_ARRAY[1]};;
-			esac; return $?
+			argue-$feature ${ARGUE_ARRAY[1]}; return $?
 		done
 	fi
 	argue-store() { # $1 - value
@@ -142,9 +148,7 @@ argue() {
 			else
 				eval "${varname%[]}='$1'"
 			fi
-			return 0
 		fi
-		return 1
 	}
 	local checked
 	argue-check() { # $1 - value
@@ -171,6 +175,13 @@ argue() {
 					checked="invalid value; expected a number in interval $checker"
 					return 1
 				fi
+			elif [[ $checker =~ ^\|(.+)\|$ ]]; then
+				local template=${BASH_REMATCH[1]} index
+				for ((index = 0; index < ${#template}; index++)); do
+					local element=${template:$index:1}; local pattern=${ARGUE_MASKS[$element]}
+					if ((${#pattern})); then [[ ${1:$index:1} =~ ^$pattern$ ]]; else [[ ${1:$index:1} == $element ]]; fi
+					(($?)) && checked="invalid character '${1:$index:1}' at position $index; expected ${pattern:-'$element'}" && return 1
+				done
 			fi
 		done
 		checked="${checked:-$1}"
@@ -209,7 +220,7 @@ argue() {
 	argue-input() {
 		local consent="y|yes" dissent="n|no"
 		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
-		((${#checkers})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
+		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
 			|| echo "($consent|$dissent) (default: ${dissent##*|})"
 		while printf "%3s$meaning > " && argue-enter; do
 			if ((${#entered})); then
@@ -277,7 +288,11 @@ argue() {
 			argue-store "$default"
 		fi
 	elif ((${#command})); then
-		ARGUE_TASKS+=("$command")
+		if [[ $meaning != internal ]]; then
+			ARGUE_TASKS+=("$command")
+		else # run instantly
+			eval "$command"
+		fi
 	fi
 	if ((${#ARGUE_ARRAY[@]})); then
 		# there are unparsed arguments
@@ -296,11 +311,9 @@ if [[ -z ${ARGUE_INNER[offer]} ]]; then
 fi
 local command=$(basename $0)
 local handler="_${command//[[:punct:]]/_}_completion"
-local path="${HOME}/bash_completion.d" file="${command}.bash"
-if  [[ ! -d $path ]] && ! mkdir -p $path; then
-	echo 'Unable to install auto completion: cannot create directory!'
-	echo 'Please, try to run with sudo.'
-	exit 1
+local file="$command.bash" path="$HOME/bash_completion.d"
+if [[ ! -d $path ]]; then
+	path="/usr/share/bash-completion/completions"
 fi
 if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
 	echo 'Unable to install auto completion: permission denied!'

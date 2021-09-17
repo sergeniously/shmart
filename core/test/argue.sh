@@ -33,7 +33,7 @@ argue -- "$@"
 argue internal offer of offer								// Display auto completion
 argue internal "guide|help|-h|--help|\?" of guide do guide	// Print this guide
 argue internal usage of usage								// Print short usage
-argue internal setup of setup do argue-setup				// Install auto completion
+argue internal setup do argue-setup							// Install auto completion
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username'
 argue required --password of PASSWORD to password ~ ".{6,32}" \
@@ -51,12 +51,16 @@ argue optional --weight of kilograms to weight ? '[30..200]' or unknown \
 	as 'How heavy are you?'
 argue required --language ... of LANGUAGE to languages[] ~ "[a-z]+" \
 	as 'Which languages do you speak?'
-argue optional --books to interests[] = books \
+argue optional --like-books to interests[] = books \
 	as 'Do you like reading books?'
-argue optional --music to interests[] = music \
+argue optional --like-games to interests[] = games \
+	as 'Do you like playing games?'
+argue optional --like-music to interests[] = music \
 	as 'Do you like listening music?'
 argue optional --show-password to show_password = true or false \
 	as 'Do you wanna see password?'
+argue optional --show-platform do 'uname -s -m' \
+	as 'Do you wanna see platform?'
 argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?'
 
