@@ -8,7 +8,7 @@
 #  argue -- "$@" # initialize internal array to parse
 #  argue required|optional|internal argname [...] [of measure] [to|at|@ varname[[]]] \
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
-#        [do command] [as comment] | [// comment...]
+#        [do command] [if request [! warning]] [as comment] | [// comment...]
 #  .....
 #  argue %% "{}" # print unparsed arguments at {} and return their number
 #  argue @@ # run parsed commands
@@ -16,12 +16,11 @@
 #  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
-#   * internal: describes arguments to enable embedded features depended on @measure
-#   ** @measure=guide: causes printing an argument's guide
-#   ** @measure=usage: causes printing an argument's usage
-#   ** @measure=offer: causes printing an argument's variants for auto completion
-#   ** another value describes custom internal feature
-#   ** also, internal arguments are not available for input
+#   * internal: describes arguments to enable internal features depended on @measure
+#   ** @measure=guide: enables printing an argument's guide by @argname
+#   ** @measure=usage: enables printing an argument's usage by @argname
+#   ** @measure=offer: enables printing an argument's completion variants by @argname
+#   ** internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
@@ -32,6 +31,12 @@
 #   ** if a command fails its echo will be displayed as an error
 #   * {one,two,...} - describes a list of possible values separated by comma
 #   * [min..max] - describes a minimum and a maximum number of a value
+#   * |mask| - describes a value template with special mask characters:
+#   ** A - expects alphabet character [a-zA-Z]
+#   ** B - expects binary character [0-1]
+#   ** D - expects decimal character [0-9]
+#   ** H - expects hexadecimal character [a-zA-Z0-9]
+#   ** P - expects punctuation character [,.:;!?]
 #  @pattern: a regular expression to validate a value (alias for ? /pattern/)
 #  @certain: a certain value which will be stored if an argument is specified
 #   * it is used only if no checker was specified
@@ -40,11 +45,11 @@
 #  @measure: a unit/type of an argument value
 #   * set it as PASSWORD to mask a value with asterisks on input
 #  @command: a command which will be performed if an argument is specified
+#  @request: a command whose exit status enables or disables argument
+#  @warning: a message to display if argument is disabled
 #  @comment: a description of an argument which will be printed for help
 # Return:
-#  200 if an argument's guide was printed
-#  201 if an argument's usage was printed
-#  202 if an argument's completion caused
+#  200 if internal feature (guide,usage,offer) was performed
 #  100 if there left unparsed arguments
 #  0 if everything is alright
 # Examples:
@@ -56,9 +61,6 @@
 #  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?'
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
-# TODO:
-#  + implement [if request] option to specify a conditional command to enable/disable argument
-#  + implement [eg example] option to print it on usage instead of varname
 
 declare -A ARGUE_INNER # array of internal features
 declare -a ARGUE_TASKS # array of commands to launch
@@ -67,14 +69,15 @@ declare -i ARGUE_COUNT # initial number of arguments
 declare -g ARGUE_FIRST # the first argument to parse
 declare -A ARGUE_MASKS # array of masking characters
 ARGUE_MASKS[A]="[a-zA-Z]" # alphabet characters
+ARGUE_MASKS[P]="[,.:;!?]" # general punctuation
 ARGUE_MASKS[H]="[a-fA-F0-9]" # hex characters
 ARGUE_MASKS[D]="[0-9]" # decimal characters
 ARGUE_MASKS[B]="[0-1]" # binary characters
 
 argue() {
-	local meaning argname several measure
-	local varname certain default command
-	local checkers=() comment # enabled=true
+	local meaning argname several measure varname
+	local certain default checkers=() command
+	local enabled=true warning comment
 	while (("$#")); do case $1 in
 		--) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
@@ -97,9 +100,11 @@ argue() {
 		do) command=$2; shift 2;;
 		as) comment=$2; shift 2;;
 		//) shift; comment="$@"; break;;
-		# if) ($2 &> /dev/null) || enabled=false; shift 2;;
-		 *) echo "argue: invalid parsing option $1"; exit 1;;
+		if) ($2 &> /dev/null) || enabled=false; shift 2;;
+		 !) $enabled || warning=$2; shift 2;;
+		 *) echo "argue: unexpected parsing option $1"; exit 1;;
 	esac done
+	$enabled || meaning=disabled
 	if [[ $meaning == internal ]]; then
 		case $measure in guide|usage|offer)
 			ARGUE_INNER[$measure]="$argname";;
@@ -107,17 +112,15 @@ argue() {
 	fi
 	argue-guide() { # print argument guide
 		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
-		printf "%6s*${meaning/internal/optional}* ${comment}\n"
-		return 200
+		printf "%6s*${meaning/internal/optional}* $comment ${warning:+($warning)}\n"
 	}
 	argue-usage() { # print argument usage
-		if [[ $meaning != internal ]]; then
+		if $enabled && [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argname/|*/}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
 			echo -n "$(basename $0) "
 		fi
-		return 201
 	}
 	argue-offer() { # print auto completion variants for $1
 		if [[ $measure != offer ]]; then
@@ -132,13 +135,13 @@ argue() {
 				fi
 			done
 		fi
-		return 202
 	}
 	if ((${#ARGUE_FIRST})); then
 		local feature && for feature in ${!ARGUE_INNER[@]}; do
 			[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
 			[[ $measure == $feature && -n $command ]] && eval "$command"
-			argue-$feature ${ARGUE_ARRAY[1]}; return $?
+			argue-$feature ${ARGUE_ARRAY[1]}
+			return 200
 		done
 	fi
 	argue-store() { # $1 - value
@@ -176,11 +179,16 @@ argue() {
 					return 1
 				fi
 			elif [[ $checker =~ ^\|(.+)\|$ ]]; then
-				local template=${BASH_REMATCH[1]} index
-				for ((index = 0; index < ${#template}; index++)); do
-					local element=${template:$index:1}; local pattern=${ARGUE_MASKS[$element]}
-					if ((${#pattern})); then [[ ${1:$index:1} =~ ^$pattern$ ]]; else [[ ${1:$index:1} == $element ]]; fi
-					(($?)) && checked="invalid character '${1:$index:1}' at position $index; expected ${pattern:-'$element'}" && return 1
+				local masking=${BASH_REMATCH[1]} index
+				for ((index = 0; index <= ${#masking}; index++)); do
+					local char=${1:$index:1} mask=${masking:$index:1} pattern=''
+					if ((${#mask})) && pattern=${ARGUE_MASKS[$mask]} && ((${#pattern}))
+						then [[ $char =~ ^$pattern$ ]]; else [[ $char == $mask ]]; fi
+					if [[ $? -ne 0 ]]; then
+						((${#char})) && checked="invalid character '$char'" || checked="unexpected end of string"
+						checked="$checked at position $index; expected ${pattern:-'${mask:-<end of string>}'}"
+						return 1
+					fi
 				done
 			fi
 		done
@@ -220,7 +228,7 @@ argue() {
 	argue-input() {
 		local consent="y|yes" dissent="n|no"
 		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
-		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')}" \
+		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')} $several" \
 			|| echo "($consent|$dissent) (default: ${dissent##*|})"
 		while printf "%3s$meaning > " && argue-enter; do
 			if ((${#entered})); then
@@ -254,7 +262,9 @@ argue() {
 		ARGUE_ARRAY=()
 		while (("$#")); do
 			if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
-				if [[ -z $several && $counter -gt 0 ]]; then
+				if ! $enabled; then
+					echo "$1 # argument is disabled ${warning:+($warning)}"; exit 1
+				elif [[ -z $several && $counter -gt 0 ]]; then
 					echo "$1 # duplicate argument!"; exit 1
 				fi
 				if !((${#checkers[@]})); then
@@ -278,7 +288,7 @@ argue() {
 	}
 	if (($ARGUE_COUNT)); then
 		argue-parse "${ARGUE_ARRAY[@]}"
-	elif [[ $meaning != internal ]]; then
+	elif $enabled && [[ $meaning != internal ]]; then
 		argue-input
 	fi
 	if !(($counter)); then

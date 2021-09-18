@@ -30,7 +30,7 @@ argue optional --no-scan to do_scan = false or true \
 	as 'Proceed without scanning?'
 case $? in
 	100) argue %% 'Unknown arguments {} will be ignored';;
-	2??) echo; exit 0;;
+	200) echo; exit 0;;
 esac
 
 if $do_scan; then

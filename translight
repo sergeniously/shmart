@@ -41,12 +41,10 @@ argue internal "guide|help|--help|-h|\?" of guide do guide \
 	as 'Print detailed guide'
 argue internal usage of usage \
 	as 'Print short usage'
-argue internal "setup|install" of setup do install \
+argue internal "setup|install" of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
 	as 'Install auto completion and other dependancies'
-if command -v xsel &> /dev/null; then
-	argue optional --selection to expression : get-selection \
-		as 'Translate selected expression'
-fi
+argue optional --selection to expression : get-selection if 'command -v xsel' ! 'xsel app required' \
+	as 'Translate selected expression'
 argue optional --expression of EXPRESSION to expression ~ ".+" \
 	as 'Translate supplied expression'
 argue optional --language of LANGUAGE to language ~ "[a-z]{2}" or ru \
@@ -57,7 +55,7 @@ argue optional --notify to do_notify = true or false \
 	as 'Show translation as a system notification?'
 case $? in
 	100) argue %% 'Unknown arguments {} will be ignored';;
-	2??) echo; exit;;
+	200) echo; exit;;
 esac
 
 if [[ -z $expression ]]; then
