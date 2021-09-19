@@ -12,11 +12,11 @@ guide() {
 argue -- "$@"
 argue internal offer of offer \
 	as 'Print auto completion variants'
-argue internal "guide|-h|--help|help|\?" of guide do guide \
+argue internal guide,help,--help,-h,\\? of guide do guide \
 	as 'Print this guide'
 argue internal usage of usage \
 	as 'Print short usage'
-argue internal setup do argue-setup \
+argue internal setup do argue-setup if "test $(id -u) -eq 0" ! 'sudo required' \
 	as 'Install auto completion'
 argue required --mac ... of MAC to macs[] ? '|HH:HH:HH:HH:HH:HH|' \
 	as 'MAC addresses to find'
@@ -37,8 +37,7 @@ if $do_scan; then
 	for (( ip = $min; ip <= $max; ip++ )); do
 		progress in 'Scanning IP addresses' is $(( $ip - $min )) of $(( $max - $min )) as '[!.]'
 		ping -c 1 -W 1 -q $net.$ip &> /dev/null
-	done
-	echo
+	done; echo
 fi
 
 pcs=()

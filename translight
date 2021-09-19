@@ -37,11 +37,11 @@ vocabulary=$HOME/vocabulary.txt
 argue -- "$@"
 argue internal offer of offer \
 	as 'Print completion variants'
-argue internal "guide|help|--help|-h|\?" of guide do guide \
+argue internal guide,help,--help,-h,\\? of guide do guide \
 	as 'Print detailed guide'
 argue internal usage of usage \
 	as 'Print short usage'
-argue internal "setup|install" of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
+argue internal setup,install of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
 	as 'Install auto completion and other dependancies'
 argue optional --selection to expression : get-selection if 'command -v xsel' ! 'xsel app required' \
 	as 'Translate selected expression'

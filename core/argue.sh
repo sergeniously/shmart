@@ -6,20 +6,20 @@
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
 #  argue -- "$@" # initialize internal array to parse
-#  argue required|optional|internal argname [...] [of measure] [to|at|@ varname[[]]] \
+#  argue required|optional|internal argkeys [...] [of measure] [to|at|@ varname[[]]] \
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [as comment] | [// comment...]
 #  .....
 #  argue %% "{}" # print unparsed arguments at {} and return their number
 #  argue @@ # run parsed commands
 # Where:
-#  @argname: a pattern of an argument name(s), e.g. "-a|--arg"
+#  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
 #   * internal: describes arguments to enable internal features depended on @measure
-#   ** @measure=guide: enables printing an argument's guide by @argname
-#   ** @measure=usage: enables printing an argument's usage by @argname
-#   ** @measure=offer: enables printing an argument's completion variants by @argname
+#   ** @measure=guide: enables printing an argument's guide
+#   ** @measure=usage: enables printing an argument's usage
+#   ** @measure=offer: enables printing an argument's completion variants
 #   ** internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
@@ -54,11 +54,11 @@
 #  0 if everything is alright
 # Examples:
 #  argue -- "$@"
-#  argue internal "-h|--help|help" of guide do guide as 'Print this guide'
-#  argue internal "--usage|usage" of usage as 'Print short usage'
+#  argue internal -h,--help,help of guide do guide as 'Print this guide'
+#  argue internal --usage,usage of usage as 'Print short usage'
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username'
 #  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password'
-#  argue optional --gender to gender ~ "(male|female)" or 'unknown' as 'How do you identify yourself?'
+#  argue optional --gender to gender ? '{male,female} or 'unknown' as 'How do you identify yourself?'
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 
@@ -75,7 +75,7 @@ ARGUE_MASKS[D]="[0-9]" # decimal characters
 ARGUE_MASKS[B]="[0-1]" # binary characters
 
 argue() {
-	local meaning argname several measure varname
+	local meaning argkeys several measure varname
 	local certain default checkers=() command
 	local enabled=true warning comment
 	while (("$#")); do case $1 in
@@ -89,12 +89,12 @@ argue() {
 				eval "$command"
 			done; return 0;;
 		optional|required|internal)
-			meaning=$1; argname=$2; shift 2
-			[[ $1 == ... ]] && several=$1 && shift;;
+			meaning=$1; argkeys=$2; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
 		to|at|@) varname=$2; shift 2;;
-		=|:) certain="$1$2"; shift 2;;
+		=|:) certain=$1$2; shift 2;;
+		...) several=...; shift;;
 		of) measure=$2; shift 2;;
 		or) default=$2; shift 2;;
 		do) command=$2; shift 2;;
@@ -107,24 +107,24 @@ argue() {
 	$enabled || meaning=disabled
 	if [[ $meaning == internal ]]; then
 		case $measure in guide|usage|offer)
-			ARGUE_INNER[$measure]="$argname";;
+			ARGUE_INNER[$measure]="${argkeys//,/|}";;
 		esac
 	fi
 	argue-guide() { # print argument guide
-		printf "%2s${argname//|/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
+		printf "%2s${argkeys//,/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
 		printf "%6s*${meaning/internal/optional}* $comment ${warning:+($warning)}\n"
 	}
 	argue-usage() { # print argument usage
 		if $enabled && [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
-				"${argname/|*/}${checkers[@]+=${measure-$varname}}$several"
+				"${argkeys/,*/}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
 			echo -n "$(basename $0) "
 		fi
 	}
 	argue-offer() { # print auto completion variants for $1
 		if [[ $measure != offer ]]; then
-			local variant && for variant in ${argname//|/ }; do
+			local variant && for variant in ${argkeys//,/ }; do
 				if [[ $variant =~ ^$1 ]]; then
 					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
 				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
@@ -179,8 +179,8 @@ argue() {
 					return 1
 				fi
 			elif [[ $checker =~ ^\|(.+)\|$ ]]; then
-				local masking=${BASH_REMATCH[1]} index
-				for ((index = 0; index <= ${#masking}; index++)); do
+				local masking=${BASH_REMATCH[1]} index=0
+				for ((; index <= ${#masking}; index++)); do
 					local char=${1:$index:1} mask=${masking:$index:1} pattern=''
 					if ((${#mask})) && pattern=${ARGUE_MASKS[$mask]} && ((${#pattern}))
 						then [[ $char =~ ^$pattern$ ]]; else [[ $char == $mask ]]; fi
@@ -227,7 +227,7 @@ argue() {
 	local counter=0
 	argue-input() {
 		local consent="y|yes" dissent="n|no"
-		echo -n "${comment-${varname-$argname}}${measure+ <$measure>:} "
+		echo -n "${comment-${varname-$argkeys}}${measure+ <$measure>:} "
 		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')} $several" \
 			|| echo "($consent|$dissent) (default: ${dissent##*|})"
 		while printf "%3s$meaning > " && argue-enter; do
@@ -261,7 +261,7 @@ argue() {
 	argue-parse() {
 		ARGUE_ARRAY=()
 		while (("$#")); do
-			if [[ $1 =~ ^($argname)(=(.*))?$ ]]; then
+			if [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
 				if ! $enabled; then
 					echo "$1 # argument is disabled ${warning:+($warning)}"; exit 1
 				elif [[ -z $several && $counter -gt 0 ]]; then
@@ -293,7 +293,7 @@ argue() {
 	fi
 	if !(($counter)); then
 		if [[ $meaning == required ]]; then
-			echo "${argname//|/, } # missed required argument!" && exit 1
+			echo "${argkeys//,/, } # missed required argument!" && exit 1
 		elif [[ ${default+x} == x ]]; then
 			argue-store "$default"
 		fi
@@ -314,27 +314,23 @@ argue() {
 # install auto completion
 argue-setup()
 {
-if [[ -z ${ARGUE_INNER[offer]} ]]; then
-	echo 'Unable to install auto completion: feature is disabled!'
-	echo 'Please, declare: argue internal offer of offer'
+if ! local feature=${ARGUE_INNER[offer]/|*} || !((${#feature})); then
+	echo 'Unable to install auto completion: offer feature is disabled!'
 	exit 1
 fi
 local command=$(basename $0)
 local handler="_${command//[[:punct:]]/_}_completion"
 local file="$command.bash" path="$HOME/bash_completion.d"
-if [[ ! -d $path ]]; then
-	path="/usr/share/bash-completion/completions"
-fi
+[[ -d $path ]] || path="/usr/share/bash-completion/completions"
 if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
 	echo 'Unable to install auto completion: permission denied!'
-	echo 'Please, run with sudo.'
 	exit 1
 fi
 cat > $path/$file << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
-  COMPREPLY=(\$($(readlink -f $0) ${ARGUE_INNER[offer]/|*} \$cur))
+  COMPREPLY=(\$($(readlink -f $0) $feature \$cur))
 }
 complete -o nospace -F $handler $command
 EOT
