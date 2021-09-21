@@ -3,9 +3,9 @@
 source $(dirname $0)/../argue.sh
 
 guide() {
-    echo 'About: a demonstration script for argue function'
-    echo "Usage: $(basename $0) [options] # run without options to input"
-    echo 'Options:'
+	echo 'About: a demonstration script for argue function'
+	echo -e "Right: \ua9 Sergeniously, 2021."
+	echo 'Guide:'
 }
 
 check-date() {

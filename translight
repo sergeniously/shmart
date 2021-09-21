@@ -42,7 +42,7 @@ argue internal guide,help,--help,-h,\\? of guide do guide \
 argue internal usage of usage \
 	as 'Print short usage'
 argue internal setup,install of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
-	as 'Install auto completion and other dependancies'
+	as 'Install auto completion and other dependencies'
 argue optional --selection to expression : get-selection if 'command -v xsel' ! 'xsel app required' \
 	as 'Translate selected expression'
 argue optional --expression of EXPRESSION to expression ~ ".+" \
@@ -59,7 +59,7 @@ case $? in
 esac
 
 if [[ -z $expression ]]; then
-	echo "Expression is empty"
+	echo "Nothing to translate"
 	exit 1
 fi
 
@@ -87,6 +87,6 @@ if $do_notify; then
 	timeout=$((word_count * read_speed))
 	notify-send --expire-time=$timeout --icon="$icon_path" "$correction" "$translation"
 else
-	[[ $correction != $expression ]] && echo "* $correction:" || echo "$expression:"
+	[[ $correction != $expression ]] && echo "* $correction" || echo "> $expression"
 	echo "> $translation"
 fi

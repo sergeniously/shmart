@@ -216,7 +216,7 @@ argue() {
 	local fetched
 	argue-fetch() { # $1 - argument
 		case ${certain:0:1} in
-			:) if ! fetched=$(${certain:1}} 2>&1); then
+			:) if ! fetched=$(${certain:1} 2>&1); then
 					fetched=${fetched:-'failed to fetch a value'}
 					return 1
 				fi;;
