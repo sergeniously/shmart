@@ -21,56 +21,56 @@
 #   proceed to "echo 'Hello, world!'" in /tmp/dir/file or 'exit 1'
 #   proceed to "pack directory" do "tar -vcf /tmp/dir.tar /tmp/dir"
 proceed() {
-	local _comment _commands _perfect _handler
-	local _varname _vardata _journal=/dev/null
+	local comment commands perfect handler
+	local varname vardata journal=/dev/null
 	while (( "$#" )); do case $1 in
-		to) _comment=$2; shift 2 ;;
-		do) _commands+=("$2"); shift 2 ;;
-		or) _perfect=$2; shift 2 ;;
-		on) _handler=$2; shift 2 ;;
-		at) _varname=$2; shift 2 ;;
-		in) _journal=$2; shift 2 ;;
+		to) comment=$2; shift 2 ;;
+		do) commands+=("$2"); shift 2 ;;
+		or) perfect=$2; shift 2 ;;
+		on) handler=$2; shift 2 ;;
+		at) varname=$2; shift 2 ;;
+		in) journal=$2; shift 2 ;;
 		*) shift ;;
 	esac done
 	# if no command was specified
 	# assume comment as a command
-	if ! (( ${#_commands[@]} )); then
-		_commands+=("$_comment")
+	if ! (( ${#commands[@]} )); then
+		commands+=("$comment")
 	fi
 	if [[ -z $(trap -p INT) ]]; then
 		# set a hook to catch cancelation
-		trap '_managed=canceled' INT
+		trap 'managed=canceled' INT
 	fi
 
-	if [[ -n $_handler ]]; then
+	if [[ -n $handler ]]; then
 		# parse already trapped commands
-		local _trapped=$(trap -p $_handler)
-		_trapped=${_trapped%\'*}; _trapped=${_trapped/#*\'/}
+		local trapped=$(trap -p $handler)
+		trapped=${trapped%\'*}; trapped=${trapped/#*\'/}
 		# insert new commands into the beginning of the trap
-		_commands="echo Proceeding to $_comment on $_handler ...;${_commands[@]/%/ &>> $_journal;}echo Done.;echo;"
-		trap "${_commands} ${_trapped}" $_handler
+		commands="echo Proceeding to $comment on $handler ...;${commands[@]/%/ &>> $journal;}echo Done.;echo;"
+		trap "${commands} ${trapped}" $handler
 		return $?
 	fi
 
-	echo "Proceeding to $_comment ..."
-	local _managed=succeeded _started=$(date +%s) _command
-	for _command in "${_commands[@]}"; do
-		if [[ -n $_varname ]]; then
-			_vardata="${_vardata}$($_command 2>> $_journal)"
+	echo "Proceeding to $comment ..."
+	local managed=succeeded started=$(date +%s) command
+	for command in "${commands[@]}"; do
+		if [[ -n $varname ]]; then
+			vardata="${vardata}$($command 2>> $journal)"
 		else
-			$_command &>> $_journal
+			$command &>> $journal
 		fi
 		if [[ $? -ne 0 ]]; then
-			_managed=${_managed/succeeded/failed}; break
+			managed=${managed/succeeded/failed}; break
 		fi
 	done
-	local _elapsed=$(($(date +%s) - $_started))
-	echo -e "\r${_managed^} to ${_comment} (took $_elapsed seconds)!\n"
-	if [[ $_managed == succeeded ]]; then
-		[[ -n $_varname ]] && declare -g "$_varname=$_vardata"
+	local elapsed=$(($(date +%s) - $started))
+	echo -e "\r${managed^} to ${comment} (took $elapsed seconds)!\n"
+	if [[ $managed == succeeded ]]; then
+		[[ -n $varname ]] && declare -g "$varname=$vardata"
 		return 0
 	fi
 	# if no exception command was specified nothing will happen
-	${_perfect/die/exit 1}
+	${perfect/die/exit 1}
 	return 1
 }
