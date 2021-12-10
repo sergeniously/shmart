@@ -10,7 +10,7 @@
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [as comment] | [// comment...]
 #  .....
-#  argue %% "{}" # print unparsed arguments at {} and return their number
+#  argue %% "{}" # print unparsed arguments at {}
 #  argue @@ # run parsed commands
 # Where:
 #  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
@@ -61,6 +61,9 @@
 #  argue optional --gender to gender ? '{male,female} or 'unknown' as 'How do you identify yourself?'
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
+# TODO:
+#  + add a checker-command which returns a list of possible values <command>
+#  + add internal features by default
 
 declare -A ARGUE_INNER # array of internal features
 declare -a ARGUE_TASKS # array of commands to launch
@@ -76,15 +79,15 @@ ARGUE_MASKS[B]="[0-1]" # binary characters
 
 argue() {
 	local meaning argkeys several measure varname
-	local certain default checkers=() command
-	local enabled=true warning comment
+	local certain default command warning comment
+	local checkers=() enabled=true utility=`basename $0`
 	while (("$#")); do case $1 in
 		--) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
-		%%) shift; local remains=${#ARGUE_ARRAY[@]}
-			(($remains && "$#")) && echo "${@//\{\}/${ARGUE_ARRAY[@]}}"
-			return $remains;;
+		%%) if shift && ((${#ARGUE_ARRAY[@]} && $#)); then
+				echo "$utility: ${@//\{\}/${ARGUE_ARRAY[@]}}" > /dev/stderr
+			fi; return ${#ARGUE_ARRAY[@]};;
 		@@) for command in "${ARGUE_TASKS[@]}"; do
 				eval "$command"
 			done; return 0;;
@@ -102,7 +105,7 @@ argue() {
 		//) shift; comment="$@"; break;;
 		if) ($2 &> /dev/null) || enabled=false; shift 2;;
 		 !) $enabled || warning=$2; shift 2;;
-		 *) echo "argue: unexpected parsing option $1"; exit 1;;
+		 *) argue-error "argue: unexpected parsing option '$1'";;
 	esac done
 	$enabled || meaning=disabled
 	if [[ $meaning == internal ]]; then
@@ -119,7 +122,7 @@ argue() {
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argkeys/,*/}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
-			echo -n "$(basename $0) "
+			echo -n "$utility "
 		fi
 	}
 	argue-offer() { # print auto completion variants for $1
@@ -149,7 +152,7 @@ argue() {
 			if [[ ${varname: -2} == '[]' ]]; then
 				((${#1})) && eval "${varname%[]}+=('$1')"
 			else
-				eval "${varname%[]}='$1'"
+				eval "$varname='$1'"
 			fi
 		fi
 	}
@@ -263,19 +266,19 @@ argue() {
 		while (("$#")); do
 			if [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
 				if ! $enabled; then
-					echo "$1 # argument is disabled ${warning:+($warning)}"; exit 1
+					argue-error "$1 # argument is disabled ${warning:+($warning)}"
 				elif [[ -z $several && $counter -gt 0 ]]; then
-					echo "$1 # duplicate argument!"; exit 1
+					argue-error "$1 # duplicate argument!"
 				fi
 				if !((${#checkers[@]})); then
 					if ! argue-fetch $1; then
-						echo "$1 # $fetched!"; exit 1
+						argue-error "$1 # $fetched!"
 					fi
 					argue-store "$fetched"
 				elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
-					echo "$1 # argument needs a value!"; exit 1
+					argue-error "$1 # argument needs a value!"
 				elif ! argue-check "${BASH_REMATCH[3]}"; then
-					echo "$1 # $checked!"; exit 1
+					argue-error "$1 # $checked!"
 				else
 					argue-store "$checked"
 				fi
@@ -293,7 +296,7 @@ argue() {
 	fi
 	if !(($counter)); then
 		if [[ $meaning == required ]]; then
-			echo "${argkeys//,/, } # missed required argument!" && exit 1
+			argue-error "${argkeys//,/, } # missed required argument!"
 		elif [[ ${default+x} == x ]]; then
 			argue-store "$default"
 		fi
@@ -311,20 +314,24 @@ argue() {
 	return 0
 }
 
+# print error and exit
+argue-error() {
+	echo "$(basename $0): $@" > /dev/stderr
+	exit 1
+}
+
 # install auto completion
 argue-setup()
 {
 if ! local feature=${ARGUE_INNER[offer]/|*} || !((${#feature})); then
-	echo 'Unable to install auto completion: offer feature is disabled!'
-	exit 1
+	argue-error 'unable to install auto completion: offer feature is disabled!'
 fi
-local command=$(basename $0)
-local handler="_${command//[[:punct:]]/_}_completion"
-local file="$command.bash" path="$HOME/bash_completion.d"
+local utility=$(basename $0)
+local handler="_${utility//[[:punct:]]/_}_completion"
+local file="$utility.bash" path="$HOME/bash_completion.d"
 [[ -d $path ]] || path="/usr/share/bash-completion/completions"
 if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
-	echo 'Unable to install auto completion: permission denied!'
-	exit 1
+	argue-error 'unable to install auto completion: permission denied!'
 fi
 cat > $path/$file << EOT
 $handler() {
@@ -332,8 +339,8 @@ $handler() {
   _get_comp_words_by_ref -n = cur
   COMPREPLY=(\$($(readlink -f $0) $feature \$cur))
 }
-complete -o nospace -F $handler $command
+complete -o nospace -F $handler $utility
 EOT
-echo "Auto completion successfully installed!"
+echo "$utility: auto completion successfully installed!"
 exit 0
 }
