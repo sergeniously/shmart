@@ -18,13 +18,12 @@ install() {
 	exit $?
 }
 
-get-selection() {
-	local expression=$(xsel -o 2> /dev/null)
-	echo "${expression%\*}"
+selection() {
+	expression=$(xsel -o 2> /dev/null)
 }
 
 join() {
-	local splitter=$1; shift
+	local word splitter=$1; shift
 	for ((word = 0; word <= $#; word++)); do
 		(($word > 0)) && printf "$splitter"
 		printf "$1"; shift
@@ -43,37 +42,81 @@ argue internal usage of usage \
 	as 'Print short usage'
 argue internal setup,install of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
 	as 'Install auto completion and other dependencies'
-argue optional --selection to expression : get-selection if 'command -v xsel' ! 'xsel app required' \
+argue optional --selection do selection if 'command -v xsel' ! 'xsel app required' \
 	as 'Translate selected expression'
 argue optional --expression of EXPRESSION to expression ~ ".+" \
 	as 'Translate supplied expression'
+argue optional --stdin do 'read -r expression' \
+	as 'Translate expression from stdin'
 argue optional --language of LANGUAGE to language ~ "[a-z]{2}" or ru \
 	as 'Target language to translate'
 argue optional --memorize to do_memorize = true or false \
 	as 'Memorize translated word to vocabulary?'
+argue optional --format to do_format = true or false \
+	as 'Consider an expression as a c-format string'
 argue optional --notify to do_notify = true or false \
 	as 'Show translation as a system notification?'
+argue optional --verbose to do_verbose = true or false \
+	as 'Show additional information'
 case $? in
-	100) argue %% 'Unknown arguments {} will be ignored';;
+	0) argue @@;;
+	100) argue %% 'unknown arguments {} cannot be ignored'; exit 1;;
 	200) echo; exit;;
 esac
 
 if [[ -z $expression ]]; then
-	echo "Nothing to translate"
+	echo "Nothing to translate" > /dev/stderr
 	exit 1
 fi
 
-link="http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$language&dt=t&dt=qca&dt=bd&dj=1&q=$expression"
-if ! json=$(wget -U "Mozilla/5.0" -qO - "$link" 2> /dev/null); then
-	echo 'Cannot connect to Google Translate server'; exit 1
+# convert c-format strings into <HASH> strings (to avoid their translation)
+encode_format() {
+	local string=$1 format length number index
+	while [[ $string =~ (%[0-9a-zA-Z.]+|(\\.)+) ]]; do
+		format=${BASH_REMATCH[1]}; length=${#format}; number=''
+		for ((index = 0; index < length; index++)); do
+			number+=$(printf '%02X' "'${format:$index:1}")
+		done
+		string=${string/"$format"/<$number>}
+	done
+	echo -n "$string"
+}
+
+# restore c-format strings from <HASH> strings
+decode_format() {
+	local string=$1 format number length index
+	while [[ $string =~ \<([0-9A-Fa-f]+)\> ]]; do
+		number=${BASH_REMATCH[1]}; length=${#number}; format=''
+		for ((index = 0; index < length; index += 2)); do
+			format+=$(printf "\x${number:$index:2}")
+		done
+		string=${string/<$number>/"$format"}
+	done
+	echo -n "$string"
+}
+
+make_translate_api() {
+	echo -n "http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$language&dt=t&dt=qca&dt=bd&dj=1&q="
+	$do_format && encode_format "$expression" || echo -n "$expression"
+}
+
+api=$(make_translate_api)
+if ! json=$(wget -U "Mozilla/5.0" -qO - "$api" 2> /dev/null); then
+	echo 'Cannot connect to Google Translate server' > /dev/stderr
+	exit 1
 fi
 
-correction=$(echo $json | jq -r '.sentences[0].orig')
-translation=$(echo $json | jq -r '.sentences[0].trans')
-translations=($(echo $json | jq -r '.dict[].terms[]' 2> /dev/null))
+corrections=($(echo $json | jq -r '.sentences[].orig' 2> /dev/null))
+translations=($(echo $json | jq -r '.sentences[].trans' 2> /dev/null))
+alternatives=($(echo $json | jq -r '.dict[].terms[]' 2> /dev/null))
 
-if ((${#translations[@]})); then
-	translation="$(join ', ' "${translations[@]}")"
+correction=${corrections[@]}
+((${#alternatives[@]})) && translation=$(join ', ' "${alternatives[@]}") || \
+	translation=${translations[@]}
+
+if $do_format; then
+	correction=$(decode_format "$correction")
+	translation=$(decode_format "$translation")
 fi
 
 if $do_memorize && [[ $(echo "$correction" | wc -w) -eq 1 && ${#correction} -gt 2 ]]; then
@@ -82,11 +125,14 @@ if $do_memorize && [[ $(echo "$correction" | wc -w) -eq 1 && ${#correction} -gt 
 fi
 
 if $do_notify; then
-	read_speed=500 # ms per word
-	word_count=$(echo "$translation" | wc -w)
-	timeout=$((word_count * read_speed))
+	read_speed=100 # ms per character
+	timeout=$((read_speed * ${#translation}))
 	notify-send --expire-time=$timeout --icon="$icon_path" "$correction" "$translation"
+elif $do_verbose; then
+	if [[ $correction != $expression ]]; then
+		echo "Did you mean: '$correction'"
+	fi
+	echo "Translation: '$translation'"
 else
-	[[ $correction != $expression ]] && echo "* $correction" || echo "> $expression"
-	echo "> $translation"
+	echo "$translation"
 fi
