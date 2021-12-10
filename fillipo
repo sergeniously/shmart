@@ -1,0 +1,141 @@
+#!/bin/bash
+
+source $(dirname $0)/core/argue.sh
+
+guide() {
+	echo 'Completes PO files filling empty msgstr with original msgid or msgid translated by external translator'
+	echo 'Additionally, marks modified messages with fuzzy lable to make them easy to find and fix in text editor'
+	echo -e "\ua9 Sergeniously, 2021."
+	echo 'Guide:'
+}
+
+argue -- "$@"
+argue internal offer of offer \
+	as 'Print completion variants'
+argue internal guide,help,--help,-h,\\? of guide do guide \
+	as 'Print detailed guide'
+argue internal usage of usage \
+	as 'Print short usage'
+argue internal setup,install of setup do argue-setup if "test $(id -u) -eq 0" ! 'sudo required' \
+	as 'Install auto completion'
+argue required --input of PO-FILE to input_file ? '(test -f {})' \
+	as 'Input PO-file to read messages'
+argue optional --output of PO-FILE to output_file ~ ".+" or "$input_file" \
+	as 'Output PO-file to write messages (if not specified, the input file is used)'
+argue optional --stdout to output_file = /dev/stdout \
+	as 'Use standard output to write messages'
+argue optional --translator of COMMAND to translator ~ ".+" \
+	as 'Command to run external translator (which reads a message from standard input)'
+argue optional --no-fuzzy to do_fuzzy = false or true \
+	as 'Do not mark modified messages with a fuzzy label'
+argue optional --quite,--silent to do_verbose = false or true \
+	as 'Do not output modifications logs'
+case $? in
+	200) echo; exit 0;; # help was proceeded
+	100) argue %% 'there are unknown arguments: {}'; exit 1;;
+esac
+
+message_id=""
+message_text=""
+message_comment=""
+modification_count=0
+file_content=()
+line_counter=0
+
+dump_file_content() {
+	if [[ -n ${message_comment} ]]; then
+		echo "$message_comment" >> $target_file
+		message_comment=""
+	fi
+	local count=${#file_content[@]} index
+	for ((index = 0; index < count; index++)); do
+		if ((index == count - 1)) && [[ ${file_content[index]:0:1} == '#' ]]; then
+			message_comment=${file_content[index]}
+			break
+		fi
+		echo "${file_content[index]}" >> $target_file
+	done
+	file_content=()
+}
+
+made_modification() {
+	if $do_verbose; then
+		echo "$output_file:$line_counter: $1"
+	fi
+	((modification_count++))
+}
+
+translate_message() {
+	if [[ -n $translator ]]; then
+		if [[ $cache_original != $1 ]]; then
+			cache_translated=`echo "$1" | $translator 2> /dev/null`
+			cache_original=$1
+		fi
+		echo "$cache_translated"
+	fi
+}
+
+input_file=$(readlink -e $input_file)
+if [[ ! $output_file =~ ^/dev/ ]]; then
+	output_file=$(readlink -f $output_file)
+else
+	do_verbose=false
+fi
+target_file=$output_file
+if [[ $output_file == $input_file ]]; then
+	if ! target_file=$(mktemp -q $output_file.XXX); then
+		echo "Failed to create a temporary file" > /dev/stderr
+		exit 1
+	fi
+fi
+
+# clear target file
+echo -n > $target_file
+
+while read -r line; do
+	(( line_counter++ ))
+	if [[ $line =~ ^msgid\ \"(.*)\"$ ]]; then
+		dump_file_content
+		message_id=${BASH_REMATCH[1]}
+	elif [[ $line =~ ^(msgstr|msgstr\[[0-9]+\])\ \"(.*)\"$ && -z ${BASH_REMATCH[2]} && -n $message_id ]]; then
+		message_text=$(translate_message "$message_id")
+		line="${BASH_REMATCH[1]} \"${message_text:-$message_id}\""
+
+		if $do_fuzzy; then
+			if [[ -z $message_comment ]]; then
+				message_comment='#, fuzzy'
+				(( line_counter++ )) # added a new line
+			elif [[ ! $message_comment =~ fuzzy ]]; then
+				message_comment=${message_comment/#\#/\#, fuzzy}
+			fi
+		fi
+
+		if [[ -n $message_text ]]; then
+			made_modification "translate message: \"$message_id\" > \"$message_text\""
+		else
+			made_modification "fill empty message: \"$message_id\""
+		fi
+	fi
+
+	file_content+=("$line")
+
+done < <(cat $input_file)
+
+# dump the rest of the file content
+dump_file_content
+
+if [[ $target_file != $output_file ]]; then
+	if (($modification_count > 0)); then
+		mv -f $target_file $output_file
+	else
+		rm -f $target_file
+	fi
+fi
+
+if $do_verbose; then
+	case $modification_count in
+		0) echo "No modifications have been made";;
+		1) echo "$modification_count modification has been written to $output_file";;
+		*) echo "$modification_count modifications have been written to $output_file";;
+	esac
+fi

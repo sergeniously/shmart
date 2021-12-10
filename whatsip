@@ -1,0 +1,94 @@
+#!/bin/bash
+
+source $(dirname $0)/core/argue.sh
+
+guide() {
+	echo 'Utility to watch for IP address and notify about its changes'
+	echo -e "\ua9 Sergeniously, 2021."
+	echo 'Guide:'
+}
+
+schedule() {
+	if !((${#emails[@]})); then
+		echo "Enter at least one e-mail to notify about IP changes:"
+		while read -p " > " email; do
+			if ((${#email})); then
+				emails+=("$email")
+			elif ((${#emails[@]})); then
+				break
+			fi
+		done
+	fi
+	if ((${#emails[@]})); then
+		crontab -l | (
+			schedule="* * * * *"
+			# remove a previous task if it is present and remember its schedule
+			while read line; do [[ $line =~ ^(.+)\ /.*$(basename $0) ]] && \
+				schedule="${BASH_REMATCH[1]}" || echo "$line"
+			done
+			# append a new task at the end of the crontab file
+			echo "$schedule $(readlink -e $0) --ip=$ip ${emails[@]/#/--email=}"
+		) | crontab # save the modified crontab file
+		# and open it to let user change a schedule
+		crontab -e && echo "Successfully installed"
+	else
+		echo "Nothing to schedule"
+	fi
+	exit
+}
+
+argue -- "$@"
+argue internal guide,help,--help,-h,\\? of guide do guide \
+	as 'Print total guide'
+argue internal usage of usage \
+	as 'Print short usage'
+argue optional schedule do schedule \
+	as 'Create a schedule in crontab file'
+argue required --ip of REGEXP to ip ~ ".+" \
+	as 'IP address regular expression to watch'
+argue optional --email of EMAIL ... to emails[] ~ "[^@]+@[^@]+" \
+	as 'E-mail to notify about IP changes'
+case $? in
+	200) echo; exit 0;; # help was proceeded
+	100) argue %% 'There are unknown arguments: {}'; exit 1;;
+	0) argue @@ # run parsed commands
+esac
+
+get_ip_addr() {
+	local line
+	while read line; do
+		if [[ $line =~ inet\ ($ip) ]]; then
+			echo ${BASH_REMATCH[1]}
+			return
+		fi
+	done < <(ip addr 2> /dev/null)
+}
+
+get_os_name() {
+	local line
+	while read line; do
+		if [[ $line =~ ^PRETTY_NAME=\"(.*)\"$ ]]; then
+			echo ${BASH_REMATCH[1]}
+			return
+		fi
+	done < <(cat /etc/os-release 2> /dev/null)
+}
+
+notify() {
+	local message="$1"
+	local script_name=$(basename $0)
+	local system_name=$(get_os_name)
+	local sender_name="${script_name^^}${system_name:+ ($system_name)}"
+	echo -e "Subject: IP changed\n$message" | /usr/sbin/sendmail -F "$sender_name" "${emails[@]}"
+	echo "$(date): $message" >> /tmp/$script_name.log
+}
+
+memo_file="$HOME/.$(basename $0)"
+stored_ip=$(cat $memo_file 2> /dev/null)
+actual_ip=$(get_ip_addr)
+
+if [[ $stored_ip != $actual_ip ]]; then
+	notify "IP changed ${stored_ip:+from $stored_ip }to ${actual_ip:-nothing}"
+	echo "$actual_ip" > $memo_file
+fi
+
