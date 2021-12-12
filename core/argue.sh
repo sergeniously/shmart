@@ -5,13 +5,15 @@
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
-#  argue -- "$@" # initialize internal array to parse
+#  argue initiate "$@" # initialize internal array to parse
 #  argue required|optional|internal argkeys [...] [of measure] [to|at|@ varname[[]]] \
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [as comment] | [// comment...]
 #  .....
-#  argue %% "{}" # print unparsed arguments at {}
-#  argue @@ # run parsed commands
+#  argue finalize help && exit # exit if one of internal feature was done
+#  argue finalize more 'there are unknown arguments: {}' && exit 1 # print unparsed arguments at {} and exit
+#  argue finalize done # run parsed commands
+#  argue finalize # do three previous statements by default
 # Where:
 #  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
 #   * required: makes an argument required to specify
@@ -49,11 +51,10 @@
 #  @warning: a message to display if argument is disabled
 #  @comment: a description of an argument which will be printed for help
 # Return:
-#  200 if internal feature (guide,usage,offer) was performed
-#  100 if there left unparsed arguments
+#  1 if there are more arguments
 #  0 if everything is alright
 # Examples:
-#  argue -- "$@"
+#  argue initiate "$@"
 #  argue internal -h,--help,help of guide do guide as 'Print this guide'
 #  argue internal --usage,usage of usage as 'Print short usage'
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username'
@@ -61,15 +62,18 @@
 #  argue optional --gender to gender ? '{male,female} or 'unknown' as 'How do you identify yourself?'
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
+#  argue finalize
 # TODO:
-#  + add a checker-command which returns a list of possible values <command>
-#  + add internal features by default
+#  + implement a checker-command which returns a list of possible values: ? <command>
+#  + implement positional arguments by option: at <position>
+#  + implement internal features by default
 
 declare -A ARGUE_INNER # array of internal features
 declare -a ARGUE_TASKS # array of commands to launch
 declare -a ARGUE_ARRAY # array of arguments to parse
 declare -i ARGUE_COUNT # initial number of arguments
 declare -g ARGUE_FIRST # the first argument to parse
+declare -g ARGUE_STATE # a final state of the parser
 declare -A ARGUE_MASKS # array of masking characters
 ARGUE_MASKS[A]="[a-zA-Z]" # alphabet characters
 ARGUE_MASKS[P]="[,.:;!?]" # general punctuation
@@ -80,17 +84,21 @@ ARGUE_MASKS[B]="[0-1]" # binary characters
 argue() {
 	local meaning argkeys several measure varname
 	local certain default command warning comment
-	local checkers=() enabled=true utility=`basename $0`
-	while (("$#")); do case $1 in
-		--) shift
+	local checkers=() enabled=true
+	case $1 in
+		initiate) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
-		%%) if shift && ((${#ARGUE_ARRAY[@]} && $#)); then
-				echo "$utility: ${@//\{\}/${ARGUE_ARRAY[@]}}" > /dev/stderr
-			fi; return ${#ARGUE_ARRAY[@]};;
-		@@) for command in "${ARGUE_TASKS[@]}"; do
-				eval "$command"
-			done; return 0;;
+		finalize) shift
+			if (($#)); then
+				argue-final "$@"
+			else # do by default
+				argue-final help && echo && exit 0
+				argue-final more 'there are unknown arguments: {}' && exit 1
+				argue-final done
+			fi; return $?;;
+	esac
+	while (($#)); do case $1 in
 		optional|required|internal)
 			meaning=$1; argkeys=$2; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
@@ -122,7 +130,7 @@ argue() {
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
 				"${argkeys/,*/}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
-			echo -n "$utility "
+			echo -n "$(basename $0) "
 		fi
 	}
 	argue-offer() { # print auto completion variants for $1
@@ -144,7 +152,7 @@ argue() {
 			[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
 			[[ $measure == $feature && -n $command ]] && eval "$command"
 			argue-$feature ${ARGUE_ARRAY[1]}
-			return 200
+			ARGUE_STATE=help; return 0
 		done
 	fi
 	argue-store() { # $1 - value
@@ -308,16 +316,34 @@ argue() {
 		fi
 	fi
 	if ((${#ARGUE_ARRAY[@]})); then
-		# there are unparsed arguments
-		return 100
+		# there are more arguments
+		ARGUE_STATE=more; return 1
 	fi
-	return 0
+	ARGUE_STATE=done; return 0
 }
 
-# print error and exit
+# print error and exit badly
 argue-error() {
 	echo "$(basename $0): $@" > /dev/stderr
 	exit 1
+}
+
+# perform final operations
+argue-final() {
+	local state=$1; shift
+	case $state in
+		more)
+			if ((${#ARGUE_ARRAY[@]} && $#)); then
+				local warning="${@//\{\}/${ARGUE_ARRAY[@]}}"
+				echo "$(basename $0): $warning" > /dev/stderr
+			fi;;
+		done)
+			local command
+			for command in "${ARGUE_TASKS[@]}"; do
+				eval "$command" || return 1
+			done;;
+	esac
+	[[ $ARGUE_STATE == $state ]]
 }
 
 # install auto completion

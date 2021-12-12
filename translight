@@ -33,7 +33,7 @@ join() {
 icon_path="/usr/share/icons/google.translate.ico"
 vocabulary=$HOME/vocabulary.txt
 
-argue -- "$@"
+argue initiate "$@"
 argue internal offer of offer \
 	as 'Print completion variants'
 argue internal guide,help,--help,-h,\\? of guide do guide \
@@ -58,11 +58,8 @@ argue optional --notify to do_notify = true or false \
 	as 'Show translation as a system notification?'
 argue optional --verbose to do_verbose = true or false \
 	as 'Show additional information'
-case $? in
-	0) argue @@;;
-	100) argue %% 'unknown arguments {} cannot be ignored'; exit 1;;
-	200) echo; exit;;
-esac
+argue finalize
+
 
 if [[ -z $expression ]]; then
 	echo "Nothing to translate" > /dev/stderr

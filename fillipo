@@ -9,7 +9,7 @@ guide() {
 	echo 'Guide:'
 }
 
-argue -- "$@"
+argue initiate "$@"
 argue internal offer of offer \
 	as 'Print completion variants'
 argue internal guide,help,--help,-h,\\? of guide do guide \
@@ -30,10 +30,7 @@ argue optional --no-fuzzy to do_fuzzy = false or true \
 	as 'Do not mark modified messages with a fuzzy label'
 argue optional --quite,--silent to do_verbose = false or true \
 	as 'Do not output modifications logs'
-case $? in
-	200) echo; exit 0;; # help was proceeded
-	100) argue %% 'there are unknown arguments: {}'; exit 1;;
-esac
+argue finalize
 
 message_id=""
 message_text=""

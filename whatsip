@@ -37,7 +37,7 @@ schedule() {
 	exit
 }
 
-argue -- "$@"
+argue initiate "$@"
 argue internal guide,help,--help,-h,\\? of guide do guide \
 	as 'Print total guide'
 argue internal usage of usage \
@@ -48,11 +48,7 @@ argue required --ip of REGEXP to ip ~ ".+" \
 	as 'IP address regular expression to watch'
 argue optional --email of EMAIL ... to emails[] ~ "[^@]+@[^@]+" \
 	as 'E-mail to notify about IP changes'
-case $? in
-	200) echo; exit 0;; # help was proceeded
-	100) argue %% 'There are unknown arguments: {}'; exit 1;;
-	0) argue @@ # run parsed commands
-esac
+argue finalize
 
 get_ip_addr() {
 	local line

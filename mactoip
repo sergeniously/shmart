@@ -9,7 +9,7 @@ guide() {
 	echo 'Guide:'
 }
 
-argue -- "$@"
+argue initiate "$@"
 argue internal offer of offer \
 	as 'Print auto completion variants'
 argue internal guide,help,--help,-h,\\? of guide do guide \
@@ -28,10 +28,7 @@ argue optional --max of number to max ? '[0..255]' or 255 \
 	as 'Maximal position to stop'
 argue optional --no-scan to do_scan = false or true \
 	as 'Proceed without scanning?'
-case $? in
-	100) argue %% 'Unknown arguments {} will be ignored';;
-	200) echo; exit 0;;
-esac
+argue finalize
 
 if $do_scan; then
 	for (( ip = $min; ip <= $max; ip++ )); do

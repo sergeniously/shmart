@@ -29,7 +29,7 @@ age() {
 	fi
 }
 
-argue -- "$@"
+argue initiate "$@"
 argue internal offer of offer                             // Display auto completion
 argue internal guide,help,-h,--help,\\? of guide do guide // Print this guide
 argue internal usage of usage                             // Print short usage
@@ -66,12 +66,7 @@ argue optional --show-platform do 'uname -s -m' \
 	as 'Do you wanna see platform?'
 argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?'
-
-case $? in
-	200) echo; exit 0;;
-	100) argue %% 'There are unknown arguments: {}'; exit 1;;
-	0) argue @@ # run parsed commands
-esac
+argue finalize
 
 echo
 echo "Check your profile"
