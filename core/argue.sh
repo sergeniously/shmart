@@ -10,10 +10,10 @@
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [as comment] | [// comment...]
 #  .....
+#  argue finalize # do three following statements by default
 #  argue finalize help && exit # exit if one of internal feature was done
 #  argue finalize more 'there are unknown arguments: {}' && exit 1 # print unparsed arguments at {} and exit
 #  argue finalize done # run parsed commands
-#  argue finalize # do three previous statements by default
 # Where:
 #  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
 #   * required: makes an argument required to specify
@@ -122,6 +122,7 @@ argue() {
 		esac
 	fi
 	argue-guide() { # print argument guide
+		[[ $measure == guide ]] && echo 'Guide:'
 		printf "%2s${argkeys//,/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
 		printf "%6s*${meaning/internal/optional}* $comment ${warning:+($warning)}\n"
 	}

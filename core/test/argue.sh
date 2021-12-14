@@ -2,10 +2,9 @@
 
 source $(dirname $0)/../argue.sh
 
-guide() {
+about() {
 	echo 'About: a demonstration script for argue function'
 	echo -e "Right: \ua9 Sergeniously, 2021."
-	echo 'Guide:'
 }
 
 check-date() {
@@ -22,6 +21,7 @@ check-date() {
 }
 
 age() {
+	local seconds
 	if seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
 		echo '~' $(( ($(date +%s) - $seconds) / (86400*365) )) y.o.
 	else
@@ -31,7 +31,7 @@ age() {
 
 argue initiate "$@"
 argue internal offer of offer                             // Display auto completion
-argue internal guide,help,-h,--help,\\? of guide do guide // Print this guide
+argue internal guide,help,-h,--help,\\? of guide do about // Print this guide
 argue internal usage of usage                             // Print short usage
 argue internal setup do argue-setup	\
 	if "test $(id -u) -eq 0" ! 'sudo required'            // Install auto completion

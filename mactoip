@@ -3,16 +3,15 @@
 source $(dirname $0)/core/argue.sh
 source $(dirname $0)/core/progress.sh
 
-guide() {
+about() {
 	echo 'Find personal computer IP addresses by their MAC addresses'
 	echo -e "\ua9 Sergeniously, 2021"
-	echo 'Guide:'
 }
 
 argue initiate "$@"
 argue internal offer of offer \
 	as 'Print auto completion variants'
-argue internal guide,help,--help,-h,\\? of guide do guide \
+argue internal guide,help,--help,-h,\\? of guide do about \
 	as 'Print this guide'
 argue internal usage of usage \
 	as 'Print short usage'
