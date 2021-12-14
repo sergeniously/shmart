@@ -6,9 +6,10 @@
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
 #  argue initiate "$@" # initialize internal array to parse
-#  argue required|optional|internal argkeys [...] [of measure] [to|at|@ varname[[]]] \
+#  argue required|optional|internal argkeys [...] [of measure] [to|at varname[[]]] \
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
-#        [do command] [if request [! warning]] [as comment] | [// comment...]
+#        [do command] [if request [! warning]] [@ suggest] \
+#        [as comment] | [// comment...]
 #  .....
 #  argue finalize # do three following statements by default
 #  argue finalize help && exit # exit if one of internal feature was done
@@ -49,6 +50,7 @@
 #  @command: a command which will be performed if an argument is specified
 #  @request: a command whose exit status enables or disables argument
 #  @warning: a message to display if argument is disabled
+#  @suggest: a command to get completion variants for a value
 #  @comment: a description of an argument which will be printed for help
 # Return:
 #  1 if there are more arguments
@@ -84,7 +86,7 @@ ARGUE_MASKS[B]="[0-1]" # binary characters
 argue() {
 	local meaning argkeys several measure varname
 	local certain default command warning comment
-	local checkers=() enabled=true
+	local checkers=() enabled=true suggest
 	case $1 in
 		initiate) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
@@ -103,13 +105,14 @@ argue() {
 			meaning=$1; argkeys=$2; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
-		to|at|@) varname=$2; shift 2;;
+		to|at) varname=$2; shift 2;;
 		=|:) certain=$1$2; shift 2;;
 		...) several=...; shift;;
 		of) measure=$2; shift 2;;
 		or) default=$2; shift 2;;
 		do) command=$2; shift 2;;
 		as) comment=$2; shift 2;;
+		 @) suggest=$2; shift 2;;
 		//) shift; comment="$@"; break;;
 		if) ($2 &> /dev/null) || enabled=false; shift 2;;
 		 !) $enabled || warning=$2; shift 2;;
@@ -139,11 +142,18 @@ argue() {
 			local variant && for variant in ${argkeys//,/ }; do
 				if [[ $variant =~ ^$1 ]]; then
 					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
-				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]} checker; then
-					for checker in "${checkers[@]}"; do [[ $checker =~ ^\{(.+)\}$ ]] && break; done
-					((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
-						[[ $variant =~ ^$written ]] && echo "$variant " || true
-					done || echo "$written "
+				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]}; then
+					if [[ -n $suggest ]]; then
+						$suggest $written
+					else
+						local checker
+						for checker in "${checkers[@]}"; do
+							[[ $checker =~ ^\{(.+)\}$ ]] && break
+						done
+						((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
+							[[ $variant =~ ^$written ]] && echo "$variant " || true
+						done || echo "$written "
+					fi
 				fi
 			done
 		fi
@@ -355,8 +365,7 @@ if ! local feature=${ARGUE_INNER[offer]/|*} || !((${#feature})); then
 fi
 local utility=$(basename $0)
 local handler="_${utility//[[:punct:]]/_}_completion"
-local file="$utility.bash" path="$HOME/bash_completion.d"
-[[ -d $path ]] || path="/usr/share/bash-completion/completions"
+local file="$utility.bash" path="/usr/share/bash-completion/completions"
 if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
 	argue-error 'unable to install auto completion: permission denied!'
 fi
