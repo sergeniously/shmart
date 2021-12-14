@@ -1,0 +1,86 @@
+#!/bin/bash
+
+source $(dirname $0)/core/git.sh
+source $(dirname $0)/core/argue.sh
+source $(dirname $0)/core/proceed.sh
+
+if [[ -f $GIT_ROOT/.topics ]]; then
+	read known_topics < <(cat $GIT_ROOT/.topics)
+fi
+
+about() {
+	echo 'Push local commits to review for a current or specific branch with specific topics'
+	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
+}
+
+setup-topics() {
+	if [[ -n $topics ]]; then
+		if echo "${topics//\// }" > $GIT_ROOT/.topics; then
+			echo "Topics '$topics' are known now for repository $GIT_ROOT"
+		fi
+	fi
+	exit 0
+}
+
+check-topics() {
+	if [[ -n $known_topics ]]; then
+		local topic && for topic in ${1//\// }; do
+			if [[ ! " $known_topics " =~ " $topic " ]]; then
+				echo "unknown topic: $topic; supported: ${known_topics// /\/}"
+				return 1
+			fi
+		done
+	fi
+	return 0
+}
+
+offer-topics() {
+	local piece=${1/#*\/}
+	local exist=${1%$piece}
+	local topic
+	for topic in $known_topics; do
+		if [[ $topic == $piece ]]; then
+			echo "$exist$piece/"; break
+		fi
+		if [[ " ${exist//\// } " =~ " $topic " ]]; then
+			continue
+		fi
+		if [[ -z $piece || $topic =~ ^$piece ]]; then
+			echo "$exist$topic"
+		fi
+	done
+}
+
+offer-branch() {
+	local branch
+	while read branch; do
+		branch=${branch#\* }
+		if [[ $branch =~ ^$1 ]]; then
+			echo "$branch "
+		fi
+	done < <(git branch --list)
+}
+
+argue initiate "$@"
+argue internal offer of offer // Print completion variants
+argue internal guide,help,--help,-h,\\? of guide do about // Print this guide
+argue internal usage of usage // Print short usage
+argue optional install-completion do argue-setup if "test $(id -u) -eq 0" ! 'sudo required' \
+	as 'Install arguments auto completion'
+argue optional install-topics of TOPICS to topics ~ "[[:alnum:]/-]+" do setup-topics \
+	as 'Install known topics for a repository'
+argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ offer-branch \
+	as 'A branch to push commits for'
+argue optional topics of TOPIC1/TOPIC2/... to topics ~ "[[:alnum:]/-]+" ? '(check-topics {})' @ offer-topics \
+	as 'A topics to push commits with (separated by /)'
+argue finalize
+
+while [[ -z $branch || $branch == HEAD ]]; do
+	read -p "Input target branch: " -e branch
+done
+
+proceed to 'update local branch' \
+	do 'git pull --rebase' or die
+
+proceed to 'push commits for review' \
+	do "git push origin HEAD:refs/for/${branch}${topics:+%topic=$topics}"
