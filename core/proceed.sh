@@ -22,7 +22,7 @@
 #   proceed to "pack directory" do "tar -vcf /tmp/dir.tar /tmp/dir"
 proceed() {
 	local comment commands perfect handler
-	local varname vardata journal=/dev/null
+	local varname vardata journal=/dev/stdout
 	while (( "$#" )); do case $1 in
 		to) comment=$2; shift 2 ;;
 		do) commands+=("$2"); shift 2 ;;
@@ -43,27 +43,43 @@ proceed() {
 	fi
 
 	if [[ -n $handler ]]; then
-		# parse already trapped commands
-		local trapped=$(trap -p $handler)
-		trapped=${trapped%\'*}; trapped=${trapped/#*\'/}
+		local trapped # parse already trapped commands
+		if [[ $(trap -p $handler) =~ \'(.*)\' ]]; then
+			trapped=${BASH_REMATCH[1]}
+		fi
 		# insert new commands into the beginning of the trap
-		commands="echo Proceeding to $comment on $handler ...;${commands[@]/%/ &>> $journal;}echo Done.;echo;"
+		commands="echo Proceeding to $comment on $handler ...;${commands[@]/%/ | proceed_log $journal;}echo Done.;echo;"
 		trap "${commands} ${trapped}" $handler
 		return $?
 	fi
 
+	proceed_log() {
+		local journal=$1 message
+		while read -r message; do
+			echo "   $message" >> $journal
+		done
+	}
+
+	proceed_run() {
+		local command
+		for command in "${commands[@]}"; do
+			if [[ -n $varname ]]; then
+				$command 2> >(proceed_log $journal)
+			else
+				$command &> >(proceed_log $journal)
+			fi
+			if (($?)); then
+				return 1
+			fi
+		done
+	}
+
 	echo "Proceeding to $comment ..."
-	local managed=succeeded started=$(date +%s) command
-	for command in "${commands[@]}"; do
-		if [[ -n $varname ]]; then
-			vardata="${vardata}$($command 2>> $journal)"
-		else
-			$command &>> $journal
-		fi
-		if [[ $? -ne 0 ]]; then
-			managed=${managed/succeeded/failed}; break
-		fi
-	done
+	local managed=succeeded started=$(date +%s)
+	[[ -n $varname ]] && vardata=$(proceed_run) || proceed_run
+	if (($? != 0)); then
+		managed=${managed/succeeded/failed}
+	fi
 	local elapsed=$(($(date +%s) - $started))
 	echo -e "\r${managed^} to ${comment} (took $elapsed seconds)!\n"
 	if [[ $managed == succeeded ]]; then
