@@ -360,26 +360,28 @@ argue-final() {
 # install bash completion
 argue-setup()
 {
+local utility=$(basename $0)
+local feature=${ARGUE_INNER[offer]/|*}
 local problem=''
-if ! local feature=${ARGUE_INNER[offer]/|*} || !((${#feature})); then
+
+if [[ -z $feature ]]; then
 	problem='offer feature is disabled!'
 else
-	local utility=$(basename $0)
-	local handler="_${utility//[[:punct:]]/_}_completion"
-	local file=$utility path=${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions
-	if [[ ! -d $path ]]; then
-		mkdir -p $path || problem='cannot create completion directory'
-	elif [[ -f $path/$file ]]; then
-		test -w $path/$file || problem='cannot access existent completion file'
+	local catalog=${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions
+	if [[ ! -d $catalog ]]; then
+		mkdir -p $catalog || problem='cannot create completion directory'
+	elif [[ -f $catalog/$utility ]]; then
+		test -w $catalog/$utility || problem='cannot access existent completion file'
 	else
-		test -w $path || problem='cannot access completion directory'
+		test -w $catalog || problem='cannot access completion directory'
 	fi
 fi
 if [[ -n $problem ]]; then
 	argue-error "unable to install bash completion: $problem!"
 fi
 
-cat > $path/$file << EOT
+local handler="_${utility//[[:punct:]]/_}_completion"
+cat > $catalog/$utility << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
