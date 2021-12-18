@@ -39,8 +39,10 @@ argue internal guide,help,--help,-h,\\? of guide do about \
 	as 'Print detailed guide'
 argue internal usage of usage \
 	as 'Print short usage'
-argue internal setup,install of setup do install if "test $(id -u) -eq 0" ! 'sudo required' \
-	as 'Install auto completion and other dependencies'
+argue internal complement do argue-setup \
+	as 'Install bash completion'
+argue internal install do install if "test $(id -u) -eq 0" ! 'sudo required' \
+	as 'Install bash completion and other dependencies'
 argue optional --selection do selection if 'command -v xsel' ! 'xsel app required' \
 	as 'Translate selected expression'
 argue optional --expression of EXPRESSION to expression ~ ".+" \

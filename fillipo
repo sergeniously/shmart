@@ -5,7 +5,18 @@ source $(dirname $0)/core/argue.sh
 about() {
 	echo 'Completes PO files filling empty msgstr with original msgid or msgid translated by external translator'
 	echo 'Additionally, marks modified messages with fuzzy lable to make them easy to find and fix in text editor'
-	echo -e "\ua9 Sergeniously, 2021."
+	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
+}
+
+offer-file() {
+	local file
+	while read file; do
+		if [[ -d $file ]]; then
+			echo "$file/"
+		elif [[ $file =~ \.po$ ]]; then
+			echo "$file"
+		fi
+	done < <(compgen -f $1)
 }
 
 argue initiate "$@"
@@ -15,11 +26,11 @@ argue internal guide,help,--help,-h,\\? of guide do about \
 	as 'Print detailed guide'
 argue internal usage of usage \
 	as 'Print short usage'
-argue internal setup,install of setup do argue-setup if "test $(id -u) -eq 0" ! 'sudo required' \
-	as 'Install auto completion'
-argue required --input of PO-FILE to input_file ? '(test -f {})' \
+argue internal complement do argue-setup \
+	as 'Install bash completion'
+argue required --input of PO-FILE to input_file ~ ".+" ? '(readlink -ve {})' @ offer-file \
 	as 'Input PO-file to read messages'
-argue optional --output of PO-FILE to output_file ~ ".+" or "$input_file" \
+argue optional --output of PO-FILE to output_file ~ ".+" ? '(readlink -vf {})' or "$input_file" @ offer-file \
 	as 'Output PO-file to write messages (if not specified, the input file is used)'
 argue optional --stdout to output_file = /dev/stdout \
 	as 'Use standard output to write messages'
@@ -71,10 +82,7 @@ translate_message() {
 	fi
 }
 
-input_file=$(readlink -e $input_file)
-if [[ ! $output_file =~ ^/dev/ ]]; then
-	output_file=$(readlink -f $output_file)
-else
+if [[ $output_file =~ ^/dev/ ]]; then
 	do_verbose=false
 fi
 target_file=$output_file

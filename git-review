@@ -65,8 +65,8 @@ argue initiate "$@"
 argue internal offer of offer // Print completion variants
 argue internal guide,help,--help,-h,\\? of guide do about // Print this guide
 argue internal usage of usage // Print short usage
-argue optional install-completion do argue-setup if "test $(id -u) -eq 0" ! 'sudo required' \
-	as 'Install arguments auto completion'
+argue internal complement do argue-setup \
+	as 'Install bash completion'
 argue optional install-topics of TOPICS to topics ~ "[[:alnum:]/-]+" do setup-topics \
 	as 'Install known topics for a repository'
 argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ offer-branch \

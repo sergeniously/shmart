@@ -357,26 +357,36 @@ argue-final() {
 	[[ $ARGUE_STATE == $state ]]
 }
 
-# install auto completion
+# install bash completion
 argue-setup()
 {
+local problem=''
 if ! local feature=${ARGUE_INNER[offer]/|*} || !((${#feature})); then
-	argue-error 'unable to install auto completion: offer feature is disabled!'
+	problem='offer feature is disabled!'
+else
+	local utility=$(basename $0)
+	local handler="_${utility//[[:punct:]]/_}_completion"
+	local file=$utility path=${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions
+	if [[ ! -d $path ]]; then
+		mkdir -p $path || problem='cannot create completion directory'
+	elif [[ -f $path/$file ]]; then
+		test -w $path/$file || problem='cannot access existent completion file'
+	else
+		test -w $path || problem='cannot access completion directory'
+	fi
 fi
-local utility=$(basename $0)
-local handler="_${utility//[[:punct:]]/_}_completion"
-local file="$utility.bash" path="/usr/share/bash-completion/completions"
-if ! [[ -f $path/$file && -w $path/$file || -w $path ]]; then
-	argue-error 'unable to install auto completion: permission denied!'
+if [[ -n $problem ]]; then
+	argue-error "unable to install bash completion: $problem!"
 fi
+
 cat > $path/$file << EOT
 $handler() {
   local IFS=\$'\n' cur
   _get_comp_words_by_ref -n = cur
-  COMPREPLY=(\$($(readlink -f $0) $feature \$cur))
+  COMPREPLY=(\$($(readlink -f $0) $feature \$cur 2> /dev/null))
 }
 complete -o nospace -F $handler $utility
 EOT
-echo "$utility: auto completion successfully installed!"
+echo "$utility: bash completion successfully installed!"
 exit 0
 }
