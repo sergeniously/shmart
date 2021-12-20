@@ -38,7 +38,7 @@ schedule() {
 
 argue initiate "$@"
 argue internal guide,help,--help,-h,\\? of guide do about \
-	as 'Print total guide'
+	as 'Print this guide'
 argue internal usage of usage \
 	as 'Print short usage'
 argue optional schedule do schedule \

@@ -30,7 +30,8 @@ age() {
 }
 
 argue initiate "$@"
-argue internal offer of offer                             // Display auto completion
+argue internal offer of offer                             // Print completion variants
+argue internal input, of input                            // Input options from stdin
 argue internal guide,help,-h,--help,\\? of guide do about // Print this guide
 argue internal usage of usage                             // Print short usage
 argue internal complement do argue-setup	              // Install bash completion

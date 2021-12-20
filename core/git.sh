@@ -11,3 +11,4 @@ if [[ $GIT_BRANCH =~ ^(.*)$ ]]; then
 fi
 
 GIT_ROOT=`git rev-parse --show-toplevel 2> /dev/null`
+GIT_DIR=$GIT_ROOT/.git

@@ -4,8 +4,8 @@ source $(dirname $0)/core/git.sh
 source $(dirname $0)/core/argue.sh
 source $(dirname $0)/core/proceed.sh
 
-if [[ -f $GIT_ROOT/.topics ]]; then
-	read known_topics < <(cat $GIT_ROOT/.topics)
+if [[ -f $GIT_DIR/topics ]]; then
+	read known_topics < <(cat $GIT_DIR/topics)
 fi
 
 about() {
@@ -14,19 +14,19 @@ about() {
 }
 
 setup-topics() {
-	if [[ -n $topics ]]; then
-		if echo "${topics//\// }" > $GIT_ROOT/.topics; then
-			echo "Topics '$topics' are known now for repository $GIT_ROOT"
+	if [[ $topics ]]; then
+		if echo "${topics//\// }" > $GIT_DIR/topics; then
+			echo "Topics '$topics' are known now for the current repository"
 		fi
 	fi
 	exit 0
 }
 
 check-topics() {
-	if [[ -n $known_topics ]]; then
+	if ! $do_install && [[ $known_topics ]]; then
 		local topic && for topic in ${1//\// }; do
 			if [[ ! " $known_topics " =~ " $topic " ]]; then
-				echo "unknown topic: $topic; supported: ${known_topics// /\/}"
+				echo "unknown topic: $topic; known topics: ${known_topics// /\/}"
 				return 1
 			fi
 		done
@@ -35,18 +35,16 @@ check-topics() {
 }
 
 offer-topics() {
-	local piece=${1/#*\/}
-	local exist=${1%$piece}
-	local topic
-	for topic in $known_topics; do
-		if [[ $topic == $piece ]]; then
-			echo "$exist$piece/"; break
+	local uncompleted=${1/#*\/}
+	local completed=${1%$uncompleted}
+	local topic && for topic in $known_topics; do
+		if [[ $topic == $uncompleted ]]; then
+			echo "${completed}${topic}/"; break
 		fi
-		if [[ " ${exist//\// } " =~ " $topic " ]]; then
-			continue
-		fi
-		if [[ -z $piece || $topic =~ ^$piece ]]; then
-			echo "$exist$topic"
+		if [[ ! " ${completed//\// } " =~ " $topic " ]]; then
+			if [[ -z $uncompleted || $topic =~ ^$uncompleted ]]; then
+				echo "${completed}${topic}"
+			fi
 		fi
 	done
 }
@@ -67,15 +65,15 @@ argue internal guide,help,--help,-h,\\? of guide do about // Print this guide
 argue internal usage of usage // Print short usage
 argue internal complement do argue-setup \
 	as 'Install bash completion'
-argue optional install-topics of TOPICS to topics ~ "[[:alnum:]/-]+" do setup-topics \
-	as 'Install known topics for a repository'
+argue optional install do setup-topics to do_install = true or false \
+	as 'Make topics known for the repository'
 argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ offer-branch \
-	as 'A branch to push commits for'
+	as 'Branch to push commits for'
 argue optional topics of TOPIC1/TOPIC2/... to topics ~ "[[:alnum:]/-]+" ? '(check-topics {})' @ offer-topics \
-	as 'A topics to push commits with (separated by /)'
+	as 'Topics to push commits with (separated by /)'
 argue finalize
 
-while [[ -z $branch || $branch == HEAD ]]; do
+while [[ ! $branch || $branch == HEAD ]]; do
 	read -p "Input target branch: " -e branch
 done
 

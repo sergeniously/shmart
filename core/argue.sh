@@ -5,24 +5,25 @@
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
-#  argue initiate "$@" # initialize internal array to parse
+#  argue initiate "$@" # initialize internal array for parsing
 #  argue required|optional|internal argkeys [...] [of measure] [to|at varname[[]]] \
 #        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [@ suggest] \
 #        [as comment] | [// comment...]
 #  .....
 #  argue finalize # do three following statements by default
-#  argue finalize help && exit # exit if one of internal feature was done
-#  argue finalize more 'there are unknown arguments: {}' && exit 1 # print unparsed arguments at {} and exit
-#  argue finalize done # run parsed commands
+#  argue finalize guide usage offer && exit # exit if one of internal feature was done
+#  argue finalize extra && argue-extra 'there are unknown arguments: {}' && exit 1 # print unparsed arguments at {} and exit
+#  argue finalize run # run parsed commands
 # Where:
 #  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
-#   * internal: describes arguments to enable internal features depended on @measure
+#   * internal: describes arguments to enable internal features depended on @measure:
 #   ** @measure=guide: enables printing an argument's guide
 #   ** @measure=usage: enables printing an argument's usage
 #   ** @measure=offer: enables printing an argument's completion variants
+#   ** @measure=input: enables to input arguments from stdin
 #   ** internal arguments are not available for input
 #   * adding ... after it makes an argument multiple
 #  @varname: a name of a variable to store a value
@@ -53,15 +54,15 @@
 #  @suggest: a command to get completion variants for a value
 #  @comment: a description of an argument which will be printed for help
 # Return:
-#  1 if there are more arguments
-#  0 if everything is alright
+#  1 if argument is not encountered
+#  0 if argument is processed
 # Examples:
 #  argue initiate "$@"
 #  argue internal -h,--help,help of guide do guide as 'Print this guide'
 #  argue internal --usage,usage of usage as 'Print short usage'
 #  argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" as 'Make up a username'
 #  argue required --password of PASSWORD to password ~ ".{6,32}" as 'Make up a password'
-#  argue optional --gender to gender ? '{male,female} or 'unknown' as 'How do you identify yourself?'
+#  argue optional --gender to gender ? '{male,female}' or 'unknown' as 'How do you identify yourself?'
 #  argue optional --language ... of LANGUAGE to languages[] ~ "[a-z]+" as 'Which laguages do you speak?'
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
@@ -95,9 +96,9 @@ argue() {
 			if (($#)); then
 				argue-final "$@"
 			else # do by default
-				argue-final help && echo && exit 0
-				argue-final more 'there are unknown arguments: {}' && exit 1
-				argue-final done
+				argue-final guide usage offer && echo && exit 0
+				argue-final extra && argue-extra 'there are unknown arguments: {}' && exit 1
+				argue-final run # perform parsed commands
 			fi; return $?;;
 	esac
 	while (($#)); do case $1 in
@@ -120,7 +121,7 @@ argue() {
 	esac done
 	$enabled || meaning=disabled
 	if [[ $meaning == internal ]]; then
-		case $measure in guide|usage|offer)
+		case $measure in guide|usage|offer|input)
 			ARGUE_INNER[$measure]="${argkeys//,/|}";;
 		esac
 	fi
@@ -143,7 +144,7 @@ argue() {
 				if [[ $variant =~ ^$1 ]]; then
 					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
 				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]}; then
-					if [[ -n $suggest ]]; then
+					if [[ $suggest ]]; then
 						$suggest $written
 					else
 						local checker
@@ -158,18 +159,10 @@ argue() {
 			done
 		fi
 	}
-	if ((${#ARGUE_FIRST})); then
-		local feature && for feature in ${!ARGUE_INNER[@]}; do
-			[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
-			[[ $measure == $feature && -n $command ]] && eval "$command"
-			argue-$feature ${ARGUE_ARRAY[1]}
-			ARGUE_STATE=help; return 0
-		done
-	fi
 	argue-store() { # $1 - value
 		if ((${#varname})); then
 			if [[ ${varname: -2} == '[]' ]]; then
-				((${#1})) && eval "${varname%[]}+=('$1')"
+				[[ $1 ]] && eval "${varname%[]}+=('$1')"
 			else
 				eval "$varname='$1'"
 			fi
@@ -247,90 +240,95 @@ argue() {
 		fetched=${fetched:-$1}
 	}
 	local counter=0
-	argue-input() {
+	argue-input() { # input argument from stdin
+		if ! $enabled || [[ $meaning == internal ]]; then
+			return 1
+		fi
 		local consent="y|yes" dissent="n|no"
 		echo -n "${comment-${varname-$argkeys}}${measure+ <$measure>:} "
 		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')} $several" \
 			|| echo "($consent|$dissent) (default: ${dissent##*|})"
 		while printf "%3s$meaning > " && argue-enter; do
-			if ((${#entered})); then
+			if [[ $entered ]]; then
 				if ((${#checkers[@]})); then
 					if ! argue-check "$entered"; then
 						echo " # $checked!" && continue
 					fi
-					argue-store "$checked"; (( counter++ ))
+					argue-store "$checked"; ((counter++))
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
 					echo " # invalid value; expected ($consent|$dissent)"; continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
-					if ! argue-fetch; then
+					if argue-fetch; then
+						argue-store "$fetched"; ((counter++))
+					else
 						echo " # $fetched!"; exit 1
 					fi
-					argue-store "$fetched"; (( counter++ ))
-				elif [[ ${default+x} == x ]]; then
-					argue-store "$default"
 				fi
-			elif [[ $counter -eq 0 ]]; then
-				if [[ $meaning == required ]]; then
-					echo "# empty value of required argument"; continue
-				elif [[ ${default+x} == x ]]; then
-					argue-store "$default"
-				fi
+			elif (($counter == 0)) && [[ $meaning == required ]]; then
+				echo "# empty value of required argument"; continue
 			fi
 			meaning=optional; echo "${entered:+ # OK}"
-			[[ -z $entered || -z $several ]] && break
+			[[ ! $entered || ! $several ]] && break
 		done; echo
 	}
 	argue-parse() {
 		ARGUE_ARRAY=()
-		while (("$#")); do
-			if [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
-				if ! $enabled; then
-					argue-error "$1 # argument is disabled ${warning:+($warning)}"
-				elif [[ -z $several && $counter -gt 0 ]]; then
-					argue-error "$1 # duplicate argument!"
-				fi
-				if !((${#checkers[@]})); then
-					if ! argue-fetch $1; then
-						argue-error "$1 # $fetched!"
-					fi
-					argue-store "$fetched"
-				elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
-					argue-error "$1 # argument needs a value!"
-				elif ! argue-check "${BASH_REMATCH[3]}"; then
-					argue-error "$1 # $checked!"
-				else
-					argue-store "$checked"
-				fi
-				(( counter++ ))
-			else
-				ARGUE_ARRAY+=("$1")
+		while (($#)); do
+			if ! [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
+				ARGUE_ARRAY+=("$1"); shift; continue
 			fi
-			shift
+			if ! $enabled; then
+				argue-error "$1 # argument is disabled ${warning:+($warning)}"
+			elif [[ ! $several && $counter -gt 0 ]]; then
+				argue-error "$1 # duplicate argument!"
+			fi
+			if !((${#checkers[@]})); then
+				if ! argue-fetch $1; then
+					argue-error "$1 # $fetched!"
+				fi
+				argue-store "$fetched"
+			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
+				argue-error "$1 # argument needs a value!"
+			elif ! argue-check "${BASH_REMATCH[3]}"; then
+				argue-error "$1 # $checked!"
+			else
+				argue-store "$checked"
+			fi
+			((counter++)); shift
 		done
-	}
-	if (($ARGUE_COUNT)); then
-		argue-parse "${ARGUE_ARRAY[@]}"
-	elif $enabled && [[ $meaning != internal ]]; then
-		argue-input
-	fi
-	if !(($counter)); then
-		if [[ $meaning == required ]]; then
+		if (($counter == 0)) && [[ $meaning == required ]]; then
 			argue-error "${argkeys//,/, } # missed required argument!"
-		elif [[ ${default+x} == x ]]; then
+		fi
+	}
+	local feature
+	for feature in ${!ARGUE_INNER[@]}; do
+		[[ $ARGUE_FIRST =~ ^(${ARGUE_INNER[$feature]})$ ]] || continue
+		[[ $measure == $feature && $command ]] && eval "$command"
+		argue-$feature ${ARGUE_ARRAY[1]}; ARGUE_STATE=$feature
+		[[ $feature != input ]] && return 0
+	done
+	if [[ $ARGUE_STATE != input ]]; then
+		argue-parse "${ARGUE_ARRAY[@]}"
+		if ((${#ARGUE_ARRAY[@]})); then
+			# there are extra arguments
+			ARGUE_STATE=extra
+		else
+			ARGUE_STATE=ready
+		fi
+	fi
+	if (($counter == 0)); then
+		if [[ ${default+x} == x ]]; then
 			argue-store "$default"
 		fi
-	elif ((${#command})); then
+		return 1
+	elif [[ $command ]]; then
 		if [[ $meaning != internal ]]; then
 			ARGUE_TASKS+=("$command")
 		else # run instantly
 			eval "$command"
 		fi
 	fi
-	if ((${#ARGUE_ARRAY[@]})); then
-		# there are more arguments
-		ARGUE_STATE=more; return 1
-	fi
-	ARGUE_STATE=done; return 0
+	return 0
 }
 
 # print error and exit badly
@@ -339,22 +337,31 @@ argue-error() {
 	exit 1
 }
 
+# print unknown arguments instead of {}
+argue-extra() {
+	if ((${#ARGUE_ARRAY[@]} && $#)); then
+		local garbage=${ARGUE_ARRAY[@]}
+		local warning="${@//\{\}/${garbage// /, }}"
+		echo "$(basename $0): $warning" > /dev/stderr
+	fi
+}
+
 # perform final operations
 argue-final() {
-	local state=$1; shift
-	case $state in
-		more)
-			if ((${#ARGUE_ARRAY[@]} && $#)); then
-				local warning="${@//\{\}/${ARGUE_ARRAY[@]}}"
-				echo "$(basename $0): $warning" > /dev/stderr
-			fi;;
-		done)
+	local state
+	for state in $@; do
+		if [[ $state == run ]]; then
 			local command
 			for command in "${ARGUE_TASKS[@]}"; do
 				eval "$command" || return 1
-			done;;
-	esac
-	[[ $ARGUE_STATE == $state ]]
+			done
+			return 0
+		fi
+		if [[ $ARGUE_STATE == $state ]]; then
+			return 0
+		fi
+	done
+	return 1
 }
 
 # install bash completion
@@ -364,7 +371,7 @@ local utility=$(basename $0)
 local feature=${ARGUE_INNER[offer]/|*}
 local problem=''
 
-if [[ -z $feature ]]; then
+if [[ ! $feature ]]; then
 	problem='offer feature is disabled!'
 else
 	local catalog=${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions
@@ -376,7 +383,7 @@ else
 		test -w $catalog || problem='cannot access completion directory'
 	fi
 fi
-if [[ -n $problem ]]; then
+if [[ $problem ]]; then
 	argue-error "unable to install bash completion: $problem!"
 fi
 

@@ -9,8 +9,8 @@ about() {
 }
 
 argue initiate "$@"
-argue internal offer of offer \
-	as 'Print auto completion variants'
+argue internal offer of offer // Print completion variants
+argue internal input, of input // Input arguments from stdin
 argue internal guide,help,--help,-h,\\? of guide do about \
 	as 'Print this guide'
 argue internal usage of usage \
