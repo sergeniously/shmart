@@ -27,8 +27,6 @@ argue optional force to should_check = false or true \
 	as 'Do not check for conflict markers or whitespace errors'
 argue finalize
 
-echo "Messages: ${messages[*]}"; exit
-
 tfs_url='https://tfs.securitycode.ru/tfs/Continent/_workitems/edit'
 tfs_username='s.belenkov'
 tfs_password=''
