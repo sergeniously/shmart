@@ -23,26 +23,26 @@
 proceed() {
 	local comment commands perfect handler
 	local varname vardata journal=/dev/stdout
-	while (( "$#" )); do case $1 in
-		to) comment=$2; shift 2 ;;
-		do) commands+=("$2"); shift 2 ;;
-		or) perfect=$2; shift 2 ;;
-		on) handler=$2; shift 2 ;;
-		at) varname=$2; shift 2 ;;
-		in) journal=$2; shift 2 ;;
-		*) shift ;;
+	while (($#)); do case $1 in
+		to) comment=$2; shift 2;;
+		do) commands+=("$2"); shift 2;;
+		or) perfect=$2; shift 2;;
+		on) handler=$2; shift 2;;
+		at) varname=$2; shift 2;;
+		in) journal=$2; shift 2;;
+		 *) shift;;
 	esac done
 	# if no command was specified
 	# assume comment as a command
-	if ! (( ${#commands[@]} )); then
+	if ! ((${#commands[@]})); then
 		commands+=("$comment")
 	fi
-	if [[ -z $(trap -p INT) ]]; then
+	if [[ ! $(trap -p INT) ]]; then
 		# set a hook to catch cancelation
 		trap 'managed=canceled' INT
 	fi
 
-	if [[ -n $handler ]]; then
+	if [[ $handler ]]; then
 		local trapped # parse already trapped commands
 		if [[ $(trap -p $handler) =~ \'(.*)\' ]]; then
 			trapped=${BASH_REMATCH[1]}
@@ -76,14 +76,14 @@ proceed() {
 
 	echo "Proceeding to $comment ..."
 	local managed=succeeded started=$(date +%s)
-	[[ -n $varname ]] && vardata=$(proceed_run) || proceed_run
+	[[ $varname ]] && vardata=$(proceed_run) || proceed_run
 	if (($? != 0)); then
 		managed=${managed/succeeded/failed}
 	fi
 	local elapsed=$(($(date +%s) - $started))
 	echo -e "\r${managed^} to ${comment} (took $elapsed seconds)!\n"
 	if [[ $managed == succeeded ]]; then
-		[[ -n $varname ]] && declare -g "$varname=$vardata"
+		[[ $varname ]] && declare -g "$varname=$vardata"
 		return 0
 	fi
 	# if no exception command was specified nothing will happen
