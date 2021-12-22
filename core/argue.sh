@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # About:
-#  parse, input, print or complete arguments like name[=value];
+#  parse, input, print or complete arguments like key[[=]value];
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
@@ -133,7 +133,7 @@ argue() {
 	argue-usage() { # print argument usage
 		if $enabled && [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
-				"${argkeys/,*/}${checkers[@]+=${measure-$varname}}$several"
+				"${argkeys//,/|}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
 			echo -n "$(basename $0) "
 		fi
@@ -214,7 +214,7 @@ argue() {
 		entered=''; local snippet=''
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
-				((${#entered})) && snippet=$'\b \b' || snippet=''
+				[[ $entered ]] && snippet=$'\b \b' || snippet=''
 				entered=${entered%?}
 				continue
 			elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
@@ -230,6 +230,7 @@ argue() {
 	}
 	local fetched
 	argue-fetch() { # $1 - argument
+		fetched=''
 		case ${certain:0:1} in
 			:) if ! fetched=$(${certain:1} 2>&1); then
 					fetched=${fetched:-'failed to fetch a value'}
@@ -258,11 +259,11 @@ argue() {
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
 					echo " # invalid value; expected ($consent|$dissent)"; continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
-					if argue-fetch; then
-						argue-store "$fetched"; ((counter++))
-					else
+					if ! argue-fetch; then
 						echo " # $fetched!"; exit 1
 					fi
+					argue-store "$fetched"
+					((counter++))
 				fi
 			elif (($counter == 0)) && [[ $meaning == required ]]; then
 				echo "# empty value of required argument"; continue
@@ -287,12 +288,19 @@ argue() {
 					argue-error "$1 # $fetched!"
 				fi
 				argue-store "$fetched"
-			elif [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
-				argue-error "$1 # argument needs a value!"
-			elif ! argue-check "${BASH_REMATCH[3]}"; then
-				argue-error "$1 # $checked!"
 			else
-				argue-store "$checked"
+				if [[ ${BASH_REMATCH[2]:0:1} == '=' ]]; then
+					argue-check "${BASH_REMATCH[3]}"
+				elif [[ $# -gt 1 ]]; then
+					shift; argue-check "$1"
+				else
+					argue-error "$1 # argument needs a value!"
+				fi
+				if (($? != 0)); then
+					argue-error "$1 # $checked!"
+				else
+					argue-store "$checked"
+				fi
 			fi
 			((counter++)); shift
 		done
