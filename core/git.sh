@@ -12,3 +12,13 @@ fi
 
 GIT_ROOT=`git rev-parse --show-toplevel 2> /dev/null`
 GIT_DIR=$GIT_ROOT/.git
+
+git-offer-branch() {
+	local branch
+	while read branch; do
+		branch=${branch#\* }
+		if [[ $branch =~ ^$1 ]]; then
+			echo "$branch "
+		fi
+	done < <(git branch --list)
+}

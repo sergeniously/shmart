@@ -9,7 +9,7 @@ if [[ -f $GIT_DIR/topics ]]; then
 fi
 
 about() {
-	echo 'Push local commits to review for a current or specific branch with specific topics'
+	echo 'Push local commits to code review for a current or specific branch with specific topics'
 	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
 }
 
@@ -49,16 +49,6 @@ offer-topics() {
 	done
 }
 
-offer-branch() {
-	local branch
-	while read branch; do
-		branch=${branch#\* }
-		if [[ $branch =~ ^$1 ]]; then
-			echo "$branch "
-		fi
-	done < <(git branch --list)
-}
-
 argue initiate "$@"
 argue internal offer of offer // Print completion variants
 argue internal guide,help,--help,-h,\\? of guide do about // Print this guide
@@ -67,7 +57,7 @@ argue internal complement do argue-setup \
 	as 'Install bash completion'
 argue optional install do setup-topics to do_install = true or false \
 	as 'Make topics known for the repository'
-argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ offer-branch \
+argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ git-offer-branch \
 	as 'Branch to push commits for'
 argue optional topics of TOPIC1/TOPIC2/... to topics ~ "[[:alnum:]/-]+" ? '(check-topics {})' @ offer-topics \
 	as 'Topics to push commits with (separated by /)'
