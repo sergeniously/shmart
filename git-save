@@ -1,0 +1,110 @@
+#!/bin/bash
+
+source $(dirname $0)/core/git.sh
+source $(dirname $0)/core/argue.sh
+source $(dirname $0)/core/input.sh
+source $(dirname $0)/core/proceed.sh
+
+about() {
+	echo 'Create or update commits with specific messages and problems checking'
+	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
+}
+
+argue initiate "$@"
+argue internal offer of offer // Print completion variants
+argue internal guide,help,\\? of guide do about // Print this guide
+argue internal usage,how of usage // Print short usage
+argue internal complement do argue-setup // Install bash completion
+argue optional all,changed to content_type or changed \
+	as 'Which files must be staged for a commit?'
+argue optional tfs of ID ... to tfs_items[] ~ "[0-9]+" \
+	as 'TFS item ID to get a message for a commit'
+argue optional message of TEXT ... to messages[] ~ ".+" \
+	as 'Specific commit message'
+argue optional new to should_create = true or false \
+	as 'Create a new commit?'
+argue optional force to should_check = false or true \
+	as 'Do not check for conflict markers or whitespace errors'
+argue finalize
+
+echo "Messages: ${messages[*]}"; exit
+
+tfs_url='https://tfs.securitycode.ru/tfs/Continent/_workitems/edit'
+tfs_username='s.belenkov'
+tfs_password=''
+
+download_tfs_title() {
+	if [[ $(wget --quiet -O - $tfs_url/$1 --http-user=$tfs_username --http-password=$tfs_password) =~ \<title\>(.+)\</title\> ]]; then
+		title=${BASH_REMATCH[1]}
+		title=${title/#Bug /Bugfix #}
+		title=${title/#Task /Task #}
+		title=${title/\[*\]}
+		messages+=("$title")
+		echo "$title"
+		return 0
+	fi
+	return 1
+}
+
+has_changes() {
+	local changes
+	case $content_type in
+		changed)
+			changes=$(git status --short --untracked-files=no);;
+		all)
+			changes=$(git status --short);;
+	esac
+	[[ $changes ]]
+}
+
+add_changes() {
+	case $content_type in
+		changed)
+			git add -u;;
+		all)
+			git add -A;;
+		*)
+			return 1;;
+	esac
+}
+
+has_commits() {
+	[[ $(git cherry -v) ]]
+}
+
+if ! has_changes; then
+	echo "There are no suitable changes to be commited"
+	exit 0
+fi
+
+if $should_check; then
+	proceed to 'check changes' do 'git diff --check' or die
+fi
+
+proceed to 'stage changes' do add_changes or die
+
+if ((${#tfs_items[@]} > 0)); then
+	input // "Enter a password for $tfs_username@tfs.securitycode.ru: " at tfs_password by '*'
+	echo
+	for tfs_item in ${tfs_items[@]}; do
+		proceed to "get a title for TFS item #$tfs_item" do "download_tfs_title $tfs_item"
+	done
+fi
+
+options=()
+
+if $should_create || ! has_commits; then
+	# message is required for a new commit
+	input // 'Input a message for a new commit: ' at message \
+		as ".+" ! 'message is required' no "'\""; echo
+	messages+=("$message")
+else
+	# modify the last local commit
+	options+=(--amend --no-edit)
+fi
+
+for message in "${messages[@]}"; do
+	options+=("-m '${message//[\'\"]}'")
+done
+
+proceed to 'commit' do "git commit ${options[*]}"
