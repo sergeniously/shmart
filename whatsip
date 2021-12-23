@@ -4,7 +4,7 @@ source $(dirname $0)/core/argue.sh
 
 about() {
 	echo 'Utility to watch for IP address and notify about its changes'
-	echo -e "\ua9 Sergeniously, 2021."
+	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
 }
 
 schedule() {
@@ -37,10 +37,13 @@ schedule() {
 }
 
 argue initiate "$@"
+argue internal offer of offer // Print completion variants
 argue internal guide,help,--help,-h,\\? of guide do about \
 	as 'Print this guide'
 argue internal usage of usage \
 	as 'Print short usage'
+argue internal complement do argue-setup \
+	as 'Install bash completion'
 argue optional schedule do schedule \
 	as 'Create a schedule in crontab file'
 argue required --ip of REGEXP to ip ~ ".+" \
@@ -86,4 +89,3 @@ if [[ $stored_ip != $actual_ip ]]; then
 	notify "IP changed ${stored_ip:+from $stored_ip }to ${actual_ip:-nothing}"
 	echo "$actual_ip" > $memo_file
 fi
-
