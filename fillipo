@@ -20,12 +20,7 @@ offer-file() {
 }
 
 argue initiate "$@"
-argue internal offer of offer \
-	as 'Print completion variants'
-argue internal guide,help,--help,-h,\\? of guide do about \
-	as 'Print this guide'
-argue internal usage of usage \
-	as 'Print short usage'
+argue defaults offer guide usage
 argue internal complement do argue-setup \
 	as 'Install bash completion'
 argue required --input of PO-FILE to input_file ~ ".+" ? '(readlink -ve {})' @ offer-file \

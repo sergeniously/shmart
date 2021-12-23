@@ -67,10 +67,10 @@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
 # TODO:
-#  + implement pattern arguments like optional "" ~ ".+"
+#  + implement terminal @argkeys which consumes all arguments
+#  + implement pattern arguments for example: optional "" ~ ".+"
 #  + implement a checker-command which returns a list of possible values: ? <command>
-#  + implement positional arguments by option: at <position>
-#  + implement internal features by default
+#  + implement positional arguments by option: at @position
 
 declare -A ARGUE_INNER # array of internal features
 declare -a ARGUE_TASKS # array of commands to launch
@@ -90,6 +90,13 @@ argue() {
 		initiate) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
+		defaults)
+			while shift && (($#)); do case $1 in
+				offer) argue internal offer,complete of offer // Print completion variants;;
+				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print this guide;;
+				usage) argue internal usage,how of usage // Print short usage;;
+				input) argue internal input of input // Input options from standard input;;
+			esac done; return 0;;
 		finalize) shift
 			if (($#)); then
 				argue-final "$@"
@@ -103,7 +110,7 @@ argue() {
 	local certain default command warning comment
 	local checkers=() enabled=true suggest
 	while (($#)); do case $1 in
-		optional|required|internal)
+		optional|required|internal|terminal)
 			meaning=$1; argkeys=$2; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
@@ -278,7 +285,11 @@ argue() {
 			elif [[ ! $several && $counter -gt 0 ]]; then
 				argue-error "$1 # duplicate argument!"
 			fi
-			if !((${#checkers[@]})); then
+			if [[ $meaning == terminal ]]; then
+				while shift && (($#)); do
+					argue-store "$1"
+				done
+			elif !((${#checkers[@]})); then
 				if ! argue-fetch $1; then
 					argue-error "$1 # $fetched!"
 				fi

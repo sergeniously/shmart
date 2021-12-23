@@ -11,10 +11,9 @@ about() {
 }
 
 argue initiate "$@"
-argue internal offer of offer // Print completion variants
-argue internal guide,help,\\? of guide do about // Print this guide
-argue internal usage,how of usage // Print short usage
-argue internal complement do argue-setup // Install bash completion
+argue defaults offer guide usage
+argue internal complement do argue-setup \
+	as 'Install bash completion'
 argue optional all,changed to content_type or changed \
 	as 'Which files must be staged for a commit?'
 argue optional tfs of ID ... to tfs_items[] ~ "[0-9]+" \

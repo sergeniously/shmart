@@ -9,12 +9,7 @@ about() {
 }
 
 argue initiate "$@"
-argue internal offer of offer // Print completion variants
-argue internal input, of input // Input arguments from stdin
-argue internal guide,help,--help,-h,\\? of guide do about \
-	as 'Print this guide'
-argue internal usage of usage \
-	as 'Print short usage'
+argue defaults offer input guide usage
 argue internal complement do argue-setup \
 	as 'Install bash completion'
 argue required --mac ... of MAC to macs[] ? '|HH:HH:HH:HH:HH:HH|' \

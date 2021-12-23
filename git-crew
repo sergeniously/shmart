@@ -50,9 +50,7 @@ offer-topics() {
 }
 
 argue initiate "$@"
-argue internal offer of offer // Print completion variants
-argue internal guide,help,--help,-h,\\? of guide do about // Print this guide
-argue internal usage of usage // Print short usage
+argue defaults offer guide usage
 argue internal complement do argue-setup \
 	as 'Install bash completion'
 argue optional install do setup-topics to do_install = true or false \

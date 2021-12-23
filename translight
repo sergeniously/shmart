@@ -33,12 +33,7 @@ icon_path="/usr/share/icons/google.translate.ico"
 vocabulary=$HOME/vocabulary.txt
 
 argue initiate "$@"
-argue internal offer of offer \
-	as 'Print completion variants'
-argue internal guide,help,--help,-h,\\? of guide do about \
-	as 'Print detailed guide'
-argue internal usage of usage \
-	as 'Print short usage'
+argue defaults offer guide usage
 argue internal complement do argue-setup \
 	as 'Install bash completion'
 argue internal install do install if "test $(id -u) -eq 0" ! 'sudo required' \

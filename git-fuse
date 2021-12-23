@@ -11,9 +11,7 @@ about() {
 }
 
 argue initiate "$@"
-argue internal offer of offer // Print completion variants
-argue internal guide,help,\\? of guide do about // Print this guide
-argue internal usage,how of usage // Print short usage
+argue defaults offer guide usage
 argue internal complement do argue-setup // Install bash completion
 argue optional from of BRANCH to source_branch ~ "[0-9A-Za-z_]+" or "$GIT_BRANCH" @ git-offer-branch \
 	as 'Source branch'
