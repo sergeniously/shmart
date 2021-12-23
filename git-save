@@ -92,10 +92,12 @@ fi
 options=()
 
 if $should_create || ! has_commits; then
-	# message is required for a new commit
-	input // 'Input a message for a new commit: ' at message \
-		as ".+" ! 'message is required' no "'\""; echo
-	messages+=("$message")
+	if !((${#messages[@]})); then
+		# message is required for a new commit
+		input // 'Input a message for a new commit: ' at message \
+			as ".+" ! 'message is required' no "'\""; echo
+		messages+=("$message")
+	fi
 else
 	# modify the last local commit
 	options+=(--amend --no-edit)
@@ -105,4 +107,4 @@ for message in "${messages[@]}"; do
 	options+=("-m '${message//[\'\"]}'")
 done
 
-proceed to 'commit' do "git commit ${options[*]}"
+proceed to 'commit changes' do "git commit ${options[*]}"

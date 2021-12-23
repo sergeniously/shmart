@@ -64,9 +64,9 @@ proceed() {
 		local command
 		for command in "${commands[@]}"; do
 			if [[ -n $varname ]]; then
-				$command 2> >(proceed_log $journal)
+				eval "$command" 2> >(proceed_log $journal)
 			else
-				$command &> >(proceed_log $journal)
+				eval "$command" &> >(proceed_log $journal)
 			fi
 			if (($?)); then
 				return 1
@@ -87,6 +87,6 @@ proceed() {
 		return 0
 	fi
 	# if no exception command was specified nothing will happen
-	${perfect/die/exit 1}
+	eval "${perfect/die/exit 1}"
 	return 1
 }
