@@ -37,9 +37,7 @@ schedule() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer guide usage setup
 argue optional schedule do schedule \
 	as 'Create a schedule in crontab file'
 argue required --ip of REGEXP to ip ~ ".+" \

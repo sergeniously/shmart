@@ -50,9 +50,7 @@ offer-topics() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer guide usage setup
 argue optional install do setup-topics to do_install = true or false \
 	as 'Make topics known for the repository'
 argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ git-offer-branch \

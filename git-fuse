@@ -11,8 +11,7 @@ about() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup // Install bash completion
+argue defaults offer guide usage setup
 argue optional from of BRANCH to source_branch ~ "[0-9A-Za-z_]+" or "$GIT_BRANCH" @ git-offer-branch \
 	as 'Source branch'
 argue required into of BRANCH to target_branch ~ "[0-9A-Za-z_]+" @ git-offer-branch \

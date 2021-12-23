@@ -96,6 +96,7 @@ argue() {
 				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print this guide;;
 				usage) argue internal usage,how of usage // Print short usage;;
 				input) argue internal input of input // Input options from standard input;;
+				setup) argue internal complement of setup // Install bash completion;;
 			esac done; return 0;;
 		finalize) shift
 			if (($#)); then
@@ -129,7 +130,7 @@ argue() {
 	esac done
 	$enabled || meaning=disabled
 	if [[ $meaning == internal ]]; then
-		case $measure in guide|usage|offer|input)
+		case $measure in guide|usage|offer|input|setup)
 			ARGUE_INNER[$measure]="${argkeys//,/|}";;
 		esac
 	fi

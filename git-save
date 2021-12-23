@@ -11,9 +11,7 @@ about() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer guide usage setup
 argue optional all,changed to content_type or changed \
 	as 'Which files must be staged for a commit?'
 argue optional tfs of ID ... to tfs_items[] ~ "[0-9]+" \

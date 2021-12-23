@@ -20,9 +20,7 @@ offer-file() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer guide usage setup
 argue required --input of PO-FILE to input_file ~ ".+" ? '(readlink -ve {})' @ offer-file \
 	as 'Input PO-file to read messages'
 argue optional --output of PO-FILE to output_file ~ ".+" ? '(readlink -vf {})' or "$input_file" @ offer-file \

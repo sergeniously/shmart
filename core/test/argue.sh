@@ -30,8 +30,7 @@ age() {
 }
 
 argue initiate "$@"
-argue defaults offer guide usage input
-argue internal complement do argue-setup // Install bash completion
+argue defaults offer guide usage input setup
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username'
 argue required --password of PASSWORD to password ~ ".{6,32}" \

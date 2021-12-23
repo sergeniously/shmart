@@ -33,9 +33,7 @@ icon_path="/usr/share/icons/google.translate.ico"
 vocabulary=$HOME/vocabulary.txt
 
 argue initiate "$@"
-argue defaults offer guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer guide usage setup
 argue internal install do install if "test $(id -u) -eq 0" ! 'sudo required' \
 	as 'Install bash completion and other dependencies'
 argue optional --selection do selection if 'command -v xsel' ! 'xsel app required' \

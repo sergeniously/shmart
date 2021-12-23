@@ -9,9 +9,7 @@ about() {
 }
 
 argue initiate "$@"
-argue defaults offer input guide usage
-argue internal complement do argue-setup \
-	as 'Install bash completion'
+argue defaults offer input guide usage setup
 argue required --mac ... of MAC to macs[] ? '|HH:HH:HH:HH:HH:HH|' \
 	as 'MAC addresses to find'
 argue optional --net of IP to net ~ "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" or '192.168.111' \
