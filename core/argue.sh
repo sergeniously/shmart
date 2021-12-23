@@ -67,6 +67,7 @@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
 # TODO:
+#  + implement pattern arguments like optional "" ~ ".+"
 #  + implement a checker-command which returns a list of possible values: ? <command>
 #  + implement positional arguments by option: at <position>
 #  + implement internal features by default
@@ -85,9 +86,6 @@ ARGUE_MASKS[D]="[0-9]" # decimal characters
 ARGUE_MASKS[B]="[0-1]" # binary characters
 
 argue() {
-	local meaning argkeys several measure varname
-	local certain default command warning comment
-	local checkers=() enabled=true suggest
 	case $1 in
 		initiate) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
@@ -101,6 +99,9 @@ argue() {
 				argue-final run # perform parsed commands
 			fi; return $?;;
 	esac
+	local meaning argkeys several measure varname
+	local certain default command warning comment
+	local checkers=() enabled=true suggest
 	while (($#)); do case $1 in
 		optional|required|internal)
 			meaning=$1; argkeys=$2; shift 2;;
@@ -125,6 +126,7 @@ argue() {
 			ARGUE_INNER[$measure]="${argkeys//,/|}";;
 		esac
 	fi
+	local checked entered fetched counter=0
 	argue-guide() { # print argument guide
 		[[ $measure == guide ]] && echo 'Guide:'
 		printf "%2s${argkeys//,/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
@@ -138,26 +140,23 @@ argue() {
 			echo -n "$(basename $0) "
 		fi
 	}
-	argue-offer() { # print auto completion variants for $1
-		if [[ $measure != offer ]]; then
-			local variant && for variant in ${argkeys//,/ }; do
-				if [[ $variant =~ ^$1 ]]; then
-					printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
-				elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]}; then
-					if [[ $suggest ]]; then
-						$suggest $written
-					else
-						local checker
-						for checker in "${checkers[@]}"; do
-							[[ $checker =~ ^\{(.+)\}$ ]] && break
-						done
-						((${#BASH_REMATCH[1]})) && for variant in ${BASH_REMATCH[1]//,/ }; do
-							[[ $variant =~ ^$written ]] && echo "$variant " || true
-						done || echo "$written "
-					fi
+	argue-offer() { # print completion variants for $1
+		[[ $measure == offer ]] && return
+		local variant && for variant in ${argkeys//,/ }; do
+			if [[ $variant =~ ^$1 ]]; then
+				printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
+			elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]}; then
+				if [[ $suggest ]]; then
+					$suggest $written
+				elif argue-check "$written"; then
+					echo "$written "
+				elif [[ $checked =~ \{(.+)\}$ ]]; then
+					for variant in ${BASH_REMATCH[1]//,/ }; do
+						[[ $variant =~ ^$written ]] && echo "$variant "
+					done
 				fi
-			done
-		fi
+			fi
+		done
 	}
 	argue-store() { # $1 - value
 		if ((${#varname})); then
@@ -168,7 +167,6 @@ argue() {
 			fi
 		fi
 	}
-	local checked
 	argue-check() { # $1 - value
 		checked=''; local checker
 		for checker in "${checkers[@]}"; do
@@ -209,7 +207,6 @@ argue() {
 		done
 		checked="${checked:-$1}"
 	}
-	local entered
 	argue-enter() {
 		entered=''; local snippet=''
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
@@ -228,7 +225,6 @@ argue() {
 			fi
 		done
 	}
-	local fetched
 	argue-fetch() { # $1 - argument
 		fetched=''
 		case ${certain:0:1} in
@@ -240,7 +236,6 @@ argue() {
 		esac
 		fetched=${fetched:-$1}
 	}
-	local counter=0
 	argue-input() { # input argument from stdin
 		if ! $enabled || [[ $meaning == internal ]]; then
 			return 1
@@ -380,7 +375,7 @@ local feature=${ARGUE_INNER[offer]/|*}
 local problem=''
 
 if [[ ! $feature ]]; then
-	problem='offer feature is disabled!'
+	problem='offer feature is disabled'
 else
 	local catalog=${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions
 	if [[ ! -d $catalog ]]; then
