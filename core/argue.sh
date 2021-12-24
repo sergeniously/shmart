@@ -67,6 +67,7 @@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
 # TODO:
+#  + interrupt inputing optional arguments if Esc was pressed
 #  + implement terminal @argkeys which consumes all arguments
 #  + implement pattern arguments for example: optional "" ~ ".+"
 #  + implement a checker-command which returns a list of possible values: ? <command>
@@ -216,15 +217,20 @@ argue() {
 		checked="${checked:-$1}"
 	}
 	argue-enter() {
-		entered=''; local snippet=''
+		local snippet control
+		[[ ${measure^^} != PASSWORD ]] && snippet=$entered
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
 				[[ $entered ]] && snippet=$'\b \b' || snippet=''
 				entered=${entered%?}
 				continue
 			elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
-				# swallow control-character sequences
-				read -rs -t 0.001; snippet=''
+				read -rs -t 0.001 control # swallow control sequences
+				if [[ $snippet == $'\033' && ${#control} -eq 0 ]]; then
+					snippet=${entered//?/$'\b \b'}; entered=''
+				else
+					snippet=''
+				fi
 				continue
 			fi
 			entered="${entered}${snippet}"
@@ -245,16 +251,15 @@ argue() {
 		fetched=${fetched:-$1}
 	}
 	argue-input() { # input argument from stdin
-		if ! $enabled || [[ $meaning == internal ]]; then
-			return 1
-		fi
-		local consent="y|yes" dissent="n|no"
+		case $meaning in (disabled|internal) return 1;; esac
+		entered=''; local consent="y|yes" dissent="n|no" yesorno
+		[[ $certain || ! $varname ]] && yesorno=true || yesorno=false
 		echo -n "${comment-${varname-$argkeys}}${measure+ <$measure>:} "
-		((${#checkers[@]})) && echo "${checkers[@]#(*)}${default+ (default: '$default')} $several" \
-			|| echo "($consent|$dissent) (default: ${dissent##*|})"
+		$yesorno && echo "($consent|$dissent) (default: ${dissent##*|})" \
+			|| echo "${checkers[@]#(*)}${default+ (default: '$default')} $several"
 		while printf "%3s$meaning > " && argue-enter; do
 			if [[ $entered ]]; then
-				if ((${#checkers[@]})); then
+				if ! $yesorno; then
 					if ! argue-check "$entered"; then
 						echo " # $checked!" && continue
 					fi
@@ -271,8 +276,9 @@ argue() {
 			elif (($counter == 0)) && [[ $meaning == required ]]; then
 				echo "# empty value of required argument"; continue
 			fi
-			meaning=optional; echo "${entered:+ # OK}"
+			echo "${entered:+ # OK}"; meaning=optional
 			[[ ! $entered || ! $several ]] && break
+			entered=''
 		done; echo
 	}
 	argue-parse() {

@@ -69,12 +69,12 @@ echo "Check your profile"
 printf "%10s: %s\n" \
 	'Username' "$username" \
 	'Password' "$($show_password && echo "$password" || echo "${password//?/*}")" \
-	'Real name' "$realname" \
-	'Gender' "$gender" \
 	'Birthdate' "$birthdate" \
 	'Age' "$(age "$birthdate")" \
+	'Languages' "${languages[*]}" \
+	'Real name' "$realname" \
+	'Gender' "$gender" \
 	'Telephone' "$telephone" \
 	'Height' "${height:-unknown}${height:+ cm}" \
 	'Weight' "${weight:-unknown}${weight:+ kg}" \
-	'Languages' "${languages[*]}" \
-	'Interests' "${interests[*]:-none}"
+	'Interests' "${interests[*]:-unknown}"
