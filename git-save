@@ -22,9 +22,9 @@ argue optional force to should_check = false or true \
 argue optional tfs of ID ... to tfs_items[] ~ "[0-9]+" \
 	as 'TFS item ID to get a message for a commit'
 argue optional message of TEXT ... to messages[] ~ ".+" \
-	as 'Specific commit message'
+	as 'Separate commit message'
 argue optional // of MESSAGE ... to comments[] \
-	as 'Specific commit message'
+	as 'Absolute commit message'
 argue finalize
 
 if ((${#comments[@]})); then

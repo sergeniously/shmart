@@ -23,7 +23,7 @@ argue initiate "$@"
 argue defaults offer guide usage setup
 argue required --input of PO-FILE to input_file ~ ".+" ? '(readlink -ve {})' @ offer-file \
 	as 'Input PO-file to read messages'
-argue optional --output of PO-FILE to output_file ~ ".+" ? '(readlink -vf {})' or "$input_file" @ offer-file \
+argue optional --output of PO-FILE to output_file ~ ".+" ? '(readlink -vf {})' or "${input_file:-@INPUT}" @ offer-file \
 	as 'Output PO-file to write messages (if not specified, the input file is used)'
 argue optional --stdout to output_file = /dev/stdout \
 	as 'Use standard output to write messages'
