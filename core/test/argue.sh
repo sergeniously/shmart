@@ -3,8 +3,8 @@
 source $(dirname $0)/../argue.sh
 
 about() {
-	echo 'About: a demonstration script for argue function'
-	echo -e "Right: \ua9 Sergeniously, 2021."
+	echo 'Demonstration script for argue function'
+	echo -e "\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>"
 }
 
 check-date() {
@@ -29,20 +29,29 @@ age() {
 	fi
 }
 
+offer-language() {
+	local most_spoken_languages=(
+		english mandarin hindi spanish french
+		arabic bengali russian portuguese indonesian
+	)
+	compgen -S ' ' -W "${most_spoken_languages[*]}" $1
+}
+
 argue initiate "$@"
+argue terminal //
 argue defaults offer guide usage input setup
 argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
 	as 'Make up a username'
 argue required --password of PASSWORD to password ~ ".{6,32}" \
 	as 'Make up a password'
 argue required --birthdate of DDMMYYYY to birthdate \
-	? "/[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[1-9]{4}/" ? '(check-date {})' \
+	? "/[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[0-9]{4}/" ? '(check-date {})' \
 	as 'When were you born?'
-argue required --language ... of LANGUAGE to languages[] ~ "[a-z]+" \
+argue required --language of LANGUAGE ... to languages[] ~ "[a-z]+" @ offer-language \
 	as 'Which languages do you speak?'
 argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
 	as 'What is your real name?'
-argue optional --gender to gender of GENDER ? "{male,female}" or unknown \
+argue optional --gender of GENDER to gender ? "{male,female}" or unknown \
 	as 'How do you identify yourself?'
 argue optional --telephone of NUMBER to telephone ? '|+7(DDD)DDDDDDD|' or unknown \
 	as 'What is your telephone number?'
@@ -62,6 +71,10 @@ argue optional --show-platform do 'uname -s -m' \
 	as 'Do you wanna see platform?'
 argue optional --show-datetime do date \
 	as 'Do you wanna see datetime?'
+argue optional "--D([0-9A-Z_]+)" of OPTION ... to options[] \
+	as 'Additional useful option'
+argue optional // of COMMENTS ... to comments[] \
+	as 'Something as a comment'
 argue finalize
 
 echo
@@ -77,4 +90,6 @@ printf "%10s: %s\n" \
 	'Telephone' "$telephone" \
 	'Height' "${height:-unknown}${height:+ cm}" \
 	'Weight' "${weight:-unknown}${weight:+ kg}" \
-	'Interests' "${interests[*]:-unknown}"
+	'Interests' "${interests[*]:-unknown}" \
+	'Options' "${options[*]:-nothing}" \
+	'Comment' "${comments[*]:-nothing}"

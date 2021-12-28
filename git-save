@@ -11,18 +11,25 @@ about() {
 }
 
 argue initiate "$@"
+argue terminal //
 argue defaults offer guide usage setup
 argue optional all,changed to content_type or changed \
 	as 'Which files must be staged for a commit?'
+argue optional new to should_create = true or false \
+	as 'Create a new commit?'
+argue optional force to should_check = false or true \
+	as 'Do not check for conflicts or whitespace errors'
 argue optional tfs of ID ... to tfs_items[] ~ "[0-9]+" \
 	as 'TFS item ID to get a message for a commit'
 argue optional message of TEXT ... to messages[] ~ ".+" \
 	as 'Specific commit message'
-argue optional new to should_create = true or false \
-	as 'Create a new commit?'
-argue optional force to should_check = false or true \
-	as 'Do not check for conflict markers or whitespace errors'
+argue optional // of MESSAGE ... to comments[] \
+	as 'Specific commit message'
 argue finalize
+
+if ((${#comments[@]})); then
+	messages+=("${comments[*]}")
+fi
 
 tfs_url='https://tfs.securitycode.ru/tfs/Continent/_workitems/edit'
 tfs_username='s.belenkov'

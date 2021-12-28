@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # About:
-#  parse, input, print or complete arguments like key[[=]value];
+#  parse, input, print or complete arguments like key[=value];
 # Right:
 #  (C) 2021, Belenkov Sergei <https://github.com/sergeniously/shmart>
 # Usage:
 #  argue initiate "$@" # initialize internal array for parsing
-#  argue required|optional|internal argkeys [...] [of measure] [to|at varname[[]]] \
-#        [[? checker] [~ pattern]] | [[= certain] [: fetcher]] [or default] \
+#  argue defaults offer guide usage input setup # implement internal features by default
+#  argue required|optional|internal argkeys|pattern [of measure] [...] \
+#        [to varname] [[? checker] [~ regular]] | [[= certain] [: fetcher]] [or default] \
 #        [do command] [if request [! warning]] [@ suggest] \
 #        [as comment] | [// comment...]
 #  .....
@@ -16,7 +17,8 @@
 #  argue finalize extra && argue-extra 'there are unknown arguments: {}' && exit 1 # print unparsed arguments at {} and exit
 #  argue finalize run # run parsed commands
 # Where:
-#  @argkeys: keys of an argument separated by commas, e.g. "--arg,-a"
+#  @argkeys: keys of an argument separated by commas, e.g. -a,--arg
+#  @pattern: a regular expression to represent an argument, e.g. --d([A-Z]+)
 #   * required: makes an argument required to specify
 #   * optional: makes an argument optional to specify
 #   * internal: describes arguments to enable internal features depended on @measure:
@@ -29,7 +31,7 @@
 #  @varname: a name of a variable to store a value
 #   * adding [] at the end of it tells to treat a variable as an array
 #  @checker: a validator for checking a value in following formats:
-#   * /pattern/ - describes a regular expression
+#   * /regular/ - describes a regular expression
 #   * (command) - describes a command, e.g. test -f {}, where {} is replaced by a provided value
 #   ** if a command succeeds its non-empty echo will be considered as a corrected value
 #   ** if a command fails its echo will be displayed as an error
@@ -41,7 +43,7 @@
 #   ** D - expects decimal character [0-9]
 #   ** H - expects hexadecimal character [a-zA-Z0-9]
 #   ** P - expects punctuation character [,.:;!?]
-#  @pattern: a regular expression to validate a value (alias for ? /pattern/)
+#  @regular: a regular expression to validate a value (alias for ? /regular/)
 #  @certain: a certain value which will be stored if an argument is specified
 #   * it is used only if no checker was specified
 #  @fetcher: a command to get a certain value for an argument
@@ -67,9 +69,6 @@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
 # TODO:
-#  + interrupt inputing optional arguments if Esc was pressed
-#  + implement terminal @argkeys which consumes all arguments
-#  + implement pattern arguments for example: optional "" ~ ".+"
 #  + implement a checker-command which returns a list of possible values: ? <command>
 #  + implement positional arguments by option: at @position
 
@@ -79,6 +78,7 @@ declare -a ARGUE_ARRAY # array of arguments to parse
 declare -i ARGUE_COUNT # initial number of arguments
 declare -g ARGUE_FIRST # the first argument to parse
 declare -g ARGUE_STATE # a final state of the parser
+declare -g ARGUE_BREAK # group of terminal arguments
 declare -A ARGUE_MASKS # array of masking characters
 ARGUE_MASKS[A]="[a-zA-Z]" # alphabet characters
 ARGUE_MASKS[P]="[,.:;!?]" # general punctuation
@@ -91,12 +91,14 @@ argue() {
 		initiate) shift
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
+		terminal) shift
+			ARGUE_BREAK="$*"; return 0;;
 		defaults)
 			while shift && (($#)); do case $1 in
 				offer) argue internal offer,complete of offer // Print completion variants;;
 				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print this guide;;
 				usage) argue internal usage,how of usage // Print short usage;;
-				input) argue internal input of input // Input options from standard input;;
+				input) argue internal input of input // Input options from stdin;;
 				setup) argue internal complement of setup // Install bash completion;;
 			esac done; return 0;;
 		finalize) shift
@@ -108,12 +110,16 @@ argue() {
 				argue-final run # perform parsed commands
 			fi; return $?;;
 	esac
-	local meaning argkeys several measure varname
+	local meaning argkeys pattern several measure varname
 	local certain default command warning comment
 	local checkers=() enabled=true suggest
 	while (($#)); do case $1 in
-		optional|required|internal|terminal)
-			meaning=$1; argkeys=$2; shift 2;;
+		optional|required|internal)
+			meaning=$1
+			if [[ $2 =~ \(.*\) ]]
+				then pattern=$2
+				else argkeys=$2
+			fi; shift 2;;
 		 ~) checkers+=("/$2/"); shift 2;;
 		\?) checkers+=("$2"); shift 2;;
 		to|at) varname=$2; shift 2;;
@@ -138,13 +144,14 @@ argue() {
 	local checked entered fetched counter=0
 	argue-guide() { # print argument guide
 		[[ $measure == guide ]] && echo 'Guide:'
-		printf "%2s${argkeys//,/, }${checkers[@]+=${measure-$varname}${default+ (default: '$default')}}${several}\n"
+		printf "%2s${argkeys//,/, }${pattern//(*)/$measure}${checkers[@]+=${measure-$varname}}"
+		[[ $varname && ! $certain ]] && echo -n "${default+ (default: $default)}"; echo ${several}
 		printf "%6s*${meaning/internal/optional}* $comment ${warning:+($warning)}\n"
 	}
 	argue-usage() { # print argument usage
 		if $enabled && [[ $meaning != internal ]]; then
 			printf "$([[ $meaning == required ]] && echo "%s" || echo "[%s]" ) " \
-				"${argkeys//,/|}${checkers[@]+=${measure-$varname}}$several"
+				"${argkeys//,/|}${pattern//(*)/$measure}${checkers[@]+=${measure-$varname}}$several"
 		elif [[ $measure == usage ]]; then
 			echo -n "$(basename $0) "
 		fi
@@ -203,12 +210,12 @@ argue() {
 			elif [[ $checker =~ ^\|(.+)\|$ ]]; then
 				local masking=${BASH_REMATCH[1]} index=0
 				for ((; index <= ${#masking}; index++)); do
-					local char=${1:$index:1} mask=${masking:$index:1} pattern=''
-					if ((${#mask})) && pattern=${ARGUE_MASKS[$mask]} && ((${#pattern}))
-						then [[ $char =~ ^$pattern$ ]]; else [[ $char == $mask ]]; fi
+					local char=${1:$index:1} mask=${masking:$index:1} regular=''
+					if ((${#mask})) && regular=${ARGUE_MASKS[$mask]} && ((${#regular}))
+						then [[ $char =~ ^$regular$ ]]; else [[ $char == $mask ]]; fi
 					if [[ $? -ne 0 ]]; then
 						((${#char})) && checked="invalid character '$char'" || checked="unexpected end of string"
-						checked="$checked at position $index; expected ${pattern:-'${mask:-<end of string>}'}"
+						checked="$checked at position $index; expected ${regular:-'${mask:-<end of string>}'}"
 						return 1
 					fi
 				done
@@ -282,38 +289,50 @@ argue() {
 		done; echo
 	}
 	argue-parse() {
+		local payload
 		ARGUE_ARRAY=()
 		while (($#)); do
-			if ! [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
-				ARGUE_ARRAY+=("$1"); shift; continue
+			# parse terminal arguments
+			if [[ $1 =~ ^(${ARGUE_BREAK// /|}$) ]]; then
+				if [[ $1 =~ ^(${argkeys//,/|})$ ]]; then
+					while shift && (($#)); do
+						argue-store "$1"
+						((counter++))
+					done
+				else ARGUE_ARRAY+=("$@"); fi
+				return 0
 			fi
-			if ! $enabled; then
+			unset payload
+			local matched=false
+			if [[ $argkeys ]]; then
+				if !((${#checkers[@]})); then
+					[[ $1 =~ ^(${argkeys//,/|})$ ]] && matched=true
+				elif [[ $1 =~ ^(${argkeys//,/|})(=(.*))?$ ]]; then
+					if [[ ${BASH_REMATCH[2]:0:1} != '=' ]]; then
+						argue-error "$1 # argument needs a value!"
+					fi
+					payload=${BASH_REMATCH[3]}
+					matched=true
+				fi
+			elif [[ $pattern && $1 =~ ^$pattern$ ]]; then
+				matched=true; payload=${BASH_REMATCH[1]}
+			fi
+			if ! $matched; then
+				ARGUE_ARRAY+=("$1"); shift; continue
+			elif ! $enabled; then
 				argue-error "$1 # argument is disabled ${warning:+($warning)}"
 			elif [[ ! $several && $counter -gt 0 ]]; then
 				argue-error "$1 # duplicate argument!"
 			fi
-			if [[ $meaning == terminal ]]; then
-				while shift && (($#)); do
-					argue-store "$1"
-				done
-			elif !((${#checkers[@]})); then
+			if ! [[ -v payload ]]; then
 				if ! argue-fetch $1; then
 					argue-error "$1 # $fetched!"
 				fi
 				argue-store "$fetched"
+			elif ! argue-check "$payload"; then
+				argue-error "$1 # $checked!"
 			else
-				if [[ ${BASH_REMATCH[2]:0:1} == '=' ]]; then
-					argue-check "${BASH_REMATCH[3]}"
-				elif [[ $# -gt 1 ]]; then
-					shift; argue-check "$1"
-				else
-					argue-error "$1 # argument needs a value!"
-				fi
-				if (($? != 0)); then
-					argue-error "$1 # $checked!"
-				else
-					argue-store "$checked"
-				fi
+				argue-store "$checked"
 			fi
 			((counter++)); shift
 		done
