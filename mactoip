@@ -5,7 +5,7 @@ source $(dirname $0)/core/progress.sh
 
 about() {
 	echo 'Find personal computer IP addresses by their MAC addresses'
-	echo -e "\ua9 Sergeniously, 2021"
+	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
 }
 
 argue initiate "$@"
