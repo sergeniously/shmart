@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # About:
-#  input text in smart way supporting: password masking, value validation and default assignment
+#  input text in smart way supporting: password masking, value completion & validation and default assignment
 # Usage:
-#  input [at @varname] [= @initial] [as @pattern [! @trouble]] [no @exclude] [or @default] [by @masking] [// @comment]
+#  input [at @varname] [= @initial] [as @pattern [! @trouble]] [no @exclude] \
+#        [or @default] [by @masking] [of @suggest] [// @comment]
 # Where:
 #  @varname: a name of variable to store the inputed value;
 #  @initial: an initial string for the inputed value;
@@ -12,6 +13,7 @@
 #  @exclude: characters which are not allowed for input;
 #  @default: a default value for variable in case the inputed value is empty;
 #  @masking: a character to print instead of the inputed characters;
+#  @suggest: a command to get completion variants for a value;
 #  @comment: an output text to print before inputing;
 # Examples:
 #  input // 'Username: ' at username as "[a-z0-9]*" ! 'invalid username' or anonym
@@ -19,9 +21,10 @@
 #  input // 'Somewhat: ' at somewhat = 'Hello!' or 'Hello!' no "\'\""
 
 input() {
-	local varname initial pattern exclude
-	local trouble default masking comment
-	while (("$#")); do case $1 in
+	local varname initial pattern
+	local trouble default masking
+	local exclude suggest comment
+	while (( $# )); do case $1 in
 		at) varname=$2; shift 2;;
 		 =) initial=$2; shift 2;;
 		as) pattern=$2; shift 2;;
@@ -29,14 +32,16 @@ input() {
 		no) exclude=$2; shift 2;;
 		or) default=$2; shift 2;;
 		by) masking=$2; shift 2;;
+		of) suggest=$2; shift 2;;
 		//) comment=$2; shift 2;;
 		*) shift;;
 	esac done
 
-	comment="$comment$([[ $masking ]] && echo "${initial//?/$masking}" || echo "$initial")"
+	local entered="$initial"
 	while echo -ne "$comment"; do
-		local entered="$initial" snippet=''
-		# FIX: there is a problem when <double/triple/or more> press of different keys occurs
+		local snippet="$entered" control
+		[[ $masking ]] && snippet=${snippet//?/$masking}
+		# FIX: a problem when <double/triple/or more> press of different keys occurs
 		# read function (or somewhat else) prints overflown characters despite on -s option
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
@@ -44,11 +49,26 @@ input() {
 				entered=${entered%?} # remove the last char
 				continue
 			elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
-				# TODO: support left, right, home, end, delete keys
-				# swallow control-character sequences
-				read -rs -t 0.001; snippet=''
+				read -rs -t 0.001 control # swallow control sequence
+				control="$snippet$control"; snippet=''
+				case $control in
+					$'\011') # tab: complete entered text if there is a suggest function
+						if [[ $suggest ]] && local choices=($($suggest $entered)) && ((${#choices[@]} == 1)); then
+							snippet=${choices#$entered}; entered=${choices}
+						fi;;
+					$'\033') # esc: erase entered text
+						snippet=${entered//?/$'\b \b'}; entered='';;
+					# $'\033\133\104') # left # TODO
+					# $'\033\133\103') # right # TODO
+					# $'\033\133\063\176') # delete # TODO
+					# *) # print sequence for debug purpose
+					# 	snippet+="\$'"; for ((i = 0; i < ${#control}; i++)); do
+					# 		snippet+=$(printf '\\%03o' "'${control:$i:1}")
+					# 	done; snippet+="'";;
+				esac
 				continue
 			elif [[ $exclude =~ $snippet ]]; then
+				echo -ne '\007' > /dev/stdout # make a sound
 				snippet=''
 				continue
 			fi
@@ -60,9 +80,9 @@ input() {
 				echo "${entered:+ }# ${trouble-invalid value; expected: /$pattern/}!"
 				continue
 			else
-				echo
+				[[ $comment ]] && echo
 				if [[ $varname ]]; then
-					declare -g "$varname=${entered:-$default}"
+					eval "$varname='${entered:-$default}'"
 				fi
 			fi
 		fi
