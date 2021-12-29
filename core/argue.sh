@@ -157,7 +157,7 @@ argue() {
 			echo -n "$(basename $0) "
 		fi
 	}
-	argue-offer() { # print completion variants for argument $1
+	argue-offer() { # print completion variants for $1
 		if [[ $measure == offer ]]
 			then return # dont offer itself
 		fi
@@ -170,21 +170,19 @@ argue() {
 					else echo ' '
 				fi
 			elif [[ $1 =~ ^$variant=(.*)$ ]]; then
-				argue-value "${BASH_REMATCH[1]}"
+				local written=${BASH_REMATCH[1]}
+				if [[ $suggest ]]; then
+					$suggest $written
+				elif argue-check "$written"; then
+					echo "$written "
+				elif [[ $checked =~ \{(.+)\}$ ]]; then
+					local variant
+					for variant in ${BASH_REMATCH[1]//,/ }; do
+						[[ $variant =~ ^$written ]] && echo "$variant "
+					done
+				fi
 			fi
 		done
-	}
-	argue-value() { # print completion variant for value $1
-		if [[ $suggest ]]; then
-			$suggest $1
-		elif argue-check "$1"; then
-			echo "$1 "
-		elif [[ $checked =~ \{(.+)\}$ ]]; then
-			local variant
-			for variant in ${BASH_REMATCH[1]//,/ }; do
-				[[ $variant =~ ^$1 ]] && echo "$variant "
-			done
-		fi
 	}
 	argue-check() { # $1 - value
 		checked=''; local checker
@@ -226,46 +224,12 @@ argue() {
 		done
 		checked="${checked:-$1}"
 	}
-	argue-enter() {
-		local snippet control
-		[[ ${measure^^} != PASSWORD ]] && snippet=$entered
-		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
-			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
-				[[ $entered ]] && snippet=$'\b \b' || snippet=''
-				entered=${entered%?}; continue
-			elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
-				read -rs -t 0.001 control # swallow control sequence
-				control="$snippet$control"; snippet=''
-				case $control in
-					$'\011') # tab
-						local choices=($(argue-value $entered))
-						if ((${#choices[@]} == 1)); then
-							snippet=${choices#$entered}
-							entered=${choices}
-						fi;;
-					$'\033') # esc
-						snippet=${entered//?/$'\b \b'}; entered='';;
-					# $'\033\133\104') # left # TODO
-					# $'\033\133\103') # right # TODO
-					# $'\033\133\063\176') # delete # TODO
-					# *) # print sequence for debug purpose
-					# 	snippet+="\$'"; for ((i = 0; i < ${#control}; i++)); do
-					# 		snippet+=$(printf '\\%03o' "'${control:$i:1}")
-					# 	done; snippet+="'";;
-				esac; continue
-			fi
-			entered="${entered}${snippet}"
-			if [[ ${measure^^} == PASSWORD ]]; then
-				snippet='*'
-			fi
-		done
-	}
 	argue-store() { # $1 - value
 		if ((${#varname})); then
 			if [[ ${varname: -2} == '[]' ]]; then
-				[[ $1 ]] && eval "${varname%[]}+=('$1')"
+				[[ $1 ]] && eval "${varname%[]}+=(${1@Q})"
 			else
-				eval "$varname='$1'"
+				eval "$varname=${1@Q}"
 			fi
 		fi
 	}
@@ -280,7 +244,22 @@ argue() {
 		esac
 		fetched=${fetched:-$1}
 	}
+	argue-enter() {
+		local options=() checker
+		for checker in "${checkers[@]}"; do
+			if [[ $checker =~ ^\{(.+)\}$ ]]; then
+				options+=("of ${BASH_REMATCH[1]}"); break
+			fi
+		done
+		[[ ${measure^^} == PASSWORD ]] && options+=('password')
+		[[ $suggest ]] && options+=("@ $suggest")
+		input ${options[*]} = "$entered"
+		entered=$INPUT_VALUE
+	}
 	argue-input() { # input argument from stdin
+		if [[ $(type -t input) != 'function' ]]; then
+			argue-error "input.sh is not declared"
+		fi
 		case $meaning in (disabled|internal) return 1;; esac
 		entered=''; local consent="y|yes" dissent="n|no" yesorno
 		[[ $certain || ! $varname ]] && yesorno=true || yesorno=false

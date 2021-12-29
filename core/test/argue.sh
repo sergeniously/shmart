@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source $(dirname $0)/../argue.sh
+source $(dirname $0)/../input.sh
 
 about() {
 	echo 'Demonstration script for argue function'
