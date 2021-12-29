@@ -69,6 +69,7 @@
 #  argue optional --robot to robot = yes or no as 'Are you a robot?'
 #  argue finalize
 # TODO:
+#  + implement left, right and delete keys while enter a value
 #  + implement a checker-command which returns a list of possible values: ? <command>
 #  + implement positional arguments by option: at @position
 
@@ -156,31 +157,33 @@ argue() {
 			echo -n "$(basename $0) "
 		fi
 	}
-	argue-offer() { # print completion variants for $1
-		[[ $measure == offer ]] && return
-		local variant && for variant in ${argkeys//,/ }; do
+	argue-offer() { # print completion variants for argument $1
+		if [[ $measure == offer ]]
+			then return # dont offer itself
+		fi
+		local variant
+		for variant in ${argkeys//,/ }; do
 			if [[ $variant =~ ^$1 ]]; then
-				printf -- "$variant"; ((${#checkers[@]})) && echo '=' || echo ' '
-			elif [[ $1 =~ ^$variant=(.*)$ ]] && local written=${BASH_REMATCH[1]}; then
-				if [[ $suggest ]]; then
-					$suggest $written
-				elif argue-check "$written"; then
-					echo "$written "
-				elif [[ $checked =~ \{(.+)\}$ ]]; then
-					for variant in ${BASH_REMATCH[1]//,/ }; do
-						[[ $variant =~ ^$written ]] && echo "$variant "
-					done
+				printf -- "$variant"
+				if ((${#checkers[@]}))
+					then echo '='
+					else echo ' '
 				fi
+			elif [[ $1 =~ ^$variant=(.*)$ ]]; then
+				argue-value "${BASH_REMATCH[1]}"
 			fi
 		done
 	}
-	argue-store() { # $1 - value
-		if ((${#varname})); then
-			if [[ ${varname: -2} == '[]' ]]; then
-				[[ $1 ]] && eval "${varname%[]}+=('$1')"
-			else
-				eval "$varname='$1'"
-			fi
+	argue-value() { # print completion variant for value $1
+		if [[ $suggest ]]; then
+			$suggest $1
+		elif argue-check "$1"; then
+			echo "$1 "
+		elif [[ $checked =~ \{(.+)\}$ ]]; then
+			local variant
+			for variant in ${BASH_REMATCH[1]//,/ }; do
+				[[ $variant =~ ^$1 ]] && echo "$variant "
+			done
 		fi
 	}
 	argue-check() { # $1 - value
@@ -229,22 +232,42 @@ argue() {
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
 				[[ $entered ]] && snippet=$'\b \b' || snippet=''
-				entered=${entered%?}
-				continue
+				entered=${entered%?}; continue
 			elif [[ $(printf '%d' "'$snippet") -lt 32 ]]; then
-				read -rs -t 0.001 control # swallow control sequences
-				if [[ $snippet == $'\033' && ${#control} -eq 0 ]]; then
-					snippet=${entered//?/$'\b \b'}; entered=''
-				else
-					snippet=''
-				fi
-				continue
+				read -rs -t 0.001 control # swallow control sequence
+				control="$snippet$control"; snippet=''
+				case $control in
+					$'\011') # tab
+						local choices=($(argue-value $entered))
+						if ((${#choices[@]} == 1)); then
+							snippet=${choices#$entered}
+							entered=${choices}
+						fi;;
+					$'\033') # esc
+						snippet=${entered//?/$'\b \b'}; entered='';;
+					# $'\033\133\104') # left # TODO
+					# $'\033\133\103') # right # TODO
+					# $'\033\133\063\176') # delete # TODO
+					# *) # print sequence for debug purpose
+					# 	snippet+="\$'"; for ((i = 0; i < ${#control}; i++)); do
+					# 		snippet+=$(printf '\\%03o' "'${control:$i:1}")
+					# 	done; snippet+="'";;
+				esac; continue
 			fi
 			entered="${entered}${snippet}"
 			if [[ ${measure^^} == PASSWORD ]]; then
 				snippet='*'
 			fi
 		done
+	}
+	argue-store() { # $1 - value
+		if ((${#varname})); then
+			if [[ ${varname: -2} == '[]' ]]; then
+				[[ $1 ]] && eval "${varname%[]}+=('$1')"
+			else
+				eval "$varname='$1'"
+			fi
+		fi
 	}
 	argue-fetch() { # $1 - argument
 		fetched=''
