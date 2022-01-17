@@ -245,39 +245,47 @@ argue() {
 		fetched=${fetched:-$1}
 	}
 	argue-enter() {
-		local options=() checker
-		for checker in "${checkers[@]}"; do
-			if [[ $checker =~ ^\{(.+)\}$ ]]; then
-				options+=("of ${BASH_REMATCH[1]}"); break
+		local options=() checker password=false
+		[[ ${measure^^} == PASSWORD ]] && password=true
+		if [[ $(type -t input) == 'function' ]]; then
+			for checker in "${checkers[@]}"; do
+				if [[ $checker =~ ^\{(.+)\}$ ]]; then
+					options+=("of ${BASH_REMATCH[1]}")
+					break
+				fi
+			done
+			if $password; then
+				options+=('password')
+				echo "(press TAB to show/hide password)"
 			fi
-		done
-		[[ ${measure^^} == PASSWORD ]] && options+=('password')
-		[[ $suggest ]] && options+=("@ $suggest")
-		input ${options[*]} = "$entered"
-		entered=$INPUT_VALUE
+			[[ $suggest ]] && options+=("@ $suggest")
+			echo -n "$1"; input ${options[*]} = "$entered"
+			entered=$INPUT_VALUE; printf "${entered:+ }"
+		else
+			options=('-e'); $password && options+=('-s')
+			read ${options[*]} -p "$1" -i "$entered" entered
+			$password && echo "${entered//?/*}"; printf "${1//?/ }"
+		fi
 	}
 	argue-input() { # input argument from stdin
-		if [[ $(type -t input) != 'function' ]]; then
-			argue-error "input.sh is not declared"
-		fi
 		case $meaning in (disabled|internal) return 1;; esac
 		entered=''; local consent="y|yes" dissent="n|no" yesorno
 		[[ $certain || ! $varname ]] && yesorno=true || yesorno=false
 		echo -n "${comment-${varname-$argkeys}}${measure+ <$measure>:} "
 		$yesorno && echo "($consent|$dissent) (default: ${dissent##*|})" \
 			|| echo "${checkers[@]#(*)}${default+ (default: '$default')} $several"
-		while printf "%3s$meaning > " && argue-enter; do
+		while argue-enter "   $meaning > "; do
 			if [[ $entered ]]; then
 				if ! $yesorno; then
 					if ! argue-check "$entered"; then
-						echo " # $checked!" && continue
+						echo "# $checked!" && continue
 					fi
 					argue-store "$checked"; ((counter++))
 				elif [[ ! $entered =~ ^($consent|$dissent)$ ]]; then
-					echo " # invalid value; expected ($consent|$dissent)"; continue
+					echo "# invalid value; expected ($consent|$dissent)"; continue
 				elif [[ $entered =~ ^($consent)$ ]]; then
 					if ! argue-fetch; then
-						echo " # $fetched!"; exit 1
+						echo "# $fetched!"; exit 1
 					fi
 					argue-store "$fetched"
 					((counter++))
@@ -285,7 +293,7 @@ argue() {
 			elif (($counter == 0)) && [[ $meaning == required ]]; then
 				echo "# empty value of required argument"; continue
 			fi
-			echo "${entered:+ # OK}"; meaning=optional
+			echo "${entered:+# OK}"; meaning=optional
 			[[ ! $entered || ! $several ]] && break
 			entered=''
 		done; echo

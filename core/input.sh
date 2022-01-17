@@ -53,6 +53,7 @@ input() {
 		fi
 	}
 
+	local display=false
 	local entered="$initial"
 	while echo -ne "$comment"; do
 		local snippet="$entered" control
@@ -68,11 +69,15 @@ input() {
 				read -rs -t 0.001 control # swallow control sequence
 				control="$snippet$control"; snippet=''
 				case $control in
-					$'\011') # tab: complete entered text if there are suggest or choices
-						if local variety=($(input-offer $entered)) && ((${#variety[@]} == 1)); then
+					$'\011') # TAB: show/hide password or complete entered text
+						if [[ $masking ]]; then
+							snippet=${entered//?/$'\b'}
+							$display && display=false || display=true
+							$display && snippet+=$entered || snippet+=${entered//?/$masking}
+						elif local variety=($(input-offer $entered)) && ((${#variety[@]} == 1)); then
 							snippet=${variety#$entered}; entered=$variety
 						fi;;
-					$'\033') # esc: erase entered text
+					$'\033') # ESC: erase entered text
 						snippet=${entered//?/$'\b \b'}; entered='';;
 					# $'\033\133\104') # left # TODO
 					# $'\033\133\103') # right # TODO
@@ -89,7 +94,9 @@ input() {
 				continue
 			fi
 			entered="${entered}${snippet}"
-			snippet="${masking:-$snippet}"
+			if [[ $masking ]] && ! $display; then
+				snippet=$masking
+			fi
 		done
 		if (($? == 0)); then
 			if [[ $pattern && ! $entered =~ ^$pattern$ ]]; then
@@ -98,6 +105,7 @@ input() {
 			else
 				INPUT_VALUE=${entered:-$default}
 				[[ $varname ]] && eval "$varname=${INPUT_VALUE@Q}"
+				$display && echo -n "${entered//?/$'\b'}${entered//?/$masking}"
 				[[ $comment ]] && echo
 			fi
 		fi

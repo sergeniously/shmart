@@ -83,8 +83,7 @@ echo "Check your profile"
 printf "%10s: %s\n" \
 	'Username' "$username" \
 	'Password' "$($show_password && echo "$password" || echo "${password//?/*}")" \
-	'Birthdate' "$birthdate" \
-	'Age' "$(age "$birthdate")" \
+	'Birthdate' "$birthdate ($(age "$birthdate"))" \
 	'Languages' "${languages[*]}" \
 	'Real name' "$realname" \
 	'Gender' "$gender" \
