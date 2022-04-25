@@ -14,49 +14,25 @@ about() {
 }
 
 setup-topics() {
-	if [[ $topics ]]; then
-		if echo "${topics//\// }" > $GIT_DIR/topics; then
-			echo "Topics '$topics' are known now for the current repository"
+	if ((${#topics[@]})); then
+		if echo "${topics[*]}" > $GIT_DIR/topics; then
+			echo "Topics '${topics[*]}' are known now for the current repository"
 		fi
 	fi
 	exit 0
-}
-
-check-topics() {
-	if ! $do_install && [[ $known_topics ]]; then
-		local topic && for topic in ${1//\// }; do
-			if [[ ! " $known_topics " =~ " $topic " ]]; then
-				echo "unknown topic: $topic; known topics: ${known_topics// /\/}"
-				return 1
-			fi
-		done
-	fi
-	return 0
-}
-
-offer-topics() {
-	local uncompleted=${1/#*\/}
-	local completed=${1%$uncompleted}
-	local topic && for topic in $known_topics; do
-		if [[ $topic == $uncompleted ]]; then
-			echo "${completed}${topic}/"; break
-		fi
-		if [[ ! " ${completed//\// } " =~ " $topic " ]]; then
-			if [[ -z $uncompleted || $topic =~ ^$uncompleted ]]; then
-				echo "${completed}${topic}"
-			fi
-		fi
-	done
 }
 
 argue initiate "$@"
 argue defaults offer guide usage setup
 argue optional install do setup-topics to do_install = true or false \
 	as 'Make topics known for the repository'
-argue optional branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ git-offer-branch \
+argue optional --branch of BRANCH to branch ~ "[0-9A-Za-z]+" or "$GIT_BRANCH" @ git-offer-branch \
 	as 'Branch to push commits for'
-argue optional topics of TOPIC1/TOPIC2/... to topics ~ "[[:alnum:]/-]+" ? '(check-topics {})' @ offer-topics \
-	as 'Topics to push commits with (separated by /)'
+for topic in $known_topics; do
+	argue optional /$topic to topics[] = $topic as 'Additional preset topic to push commits with'
+done
+argue optional "/([0-9A-Za-z_-]+)" of topic ... to topics[] \
+	as 'Additional custom topic to push commits with'
 argue finalize
 
 while [[ ! $branch || $branch == HEAD ]]; do
@@ -67,4 +43,4 @@ proceed to 'update local branch' \
 	do 'git pull --rebase' or die
 
 proceed to 'push commits for review' \
-	do "git push origin HEAD:refs/for/${branch}${topics:+%topic=$topics}"
+	do "git push origin HEAD:refs/for/${branch}${topics[*]:+%topic=${topics[*]}}"
