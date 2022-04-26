@@ -39,8 +39,10 @@ while [[ ! $branch || $branch == HEAD ]]; do
 	read -p "Input target branch: " -e branch
 done
 
+topics=$(IFS=/; echo "${topics[*]}")
+
 proceed to 'update local branch' \
 	do 'git pull --rebase' or die
 
 proceed to 'push commits for review' \
-	do "git push origin HEAD:refs/for/${branch}${topics[*]:+%topic=${topics[*]}}"
+	do "git push origin HEAD:refs/for/${branch}${topics:+%topic=$topics}"
