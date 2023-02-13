@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # Shows progress of any number of any amount
 # Usage:

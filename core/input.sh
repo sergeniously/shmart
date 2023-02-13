@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # About:
 #  input text in smart way supporting: password masking, value completion & validation and default assignment

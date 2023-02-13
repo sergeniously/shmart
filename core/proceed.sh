@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # Commands runner with natural interface which:
 #  - prints comments of what is going to be done and how it has done;
@@ -20,9 +19,39 @@
 #   proceed to 'create temp directory' do "mktemp -d dir.XXX" at temp_dir
 #   proceed to "echo 'Hello, world!'" in /tmp/dir/file or 'exit 1'
 #   proceed to "pack directory" do "tar -vcf /tmp/dir.tar /tmp/dir"
+
+declare -g PROCEED_CANCEL=false # whether a command cancelled
+declare -g PROCEED_DEBUG=false # whether to echo running commands
+declare -g PROCEED_LOG=/dev/null # default target to output logs
+
+if [[ ! $(trap -p INT) ]]; then
+	# set a hook to catch cancellation
+	trap 'PROCEED_CANCEL=true' INT
+fi
+
+proceed_log() {
+	local journal=$1 message
+	while read -r message; do
+		echo "   $message" >> $journal
+	done
+}
+
+proceed_trap() {
+	local handler=$1 command="$2"
+	local trapped # parse already trapped commands
+	if [[ $(trap -p $handler) =~ \'(.*)\' ]]; then
+		trapped=${BASH_REMATCH[1]}
+	fi
+	# insert the new command into the beginning of the trap
+	trap "${command}; ${trapped}" $handler
+
+}
+
 proceed() {
-	local comment commands perfect handler
-	local varname vardata journal=/dev/stdout
+	PROCEED_CANCEL=false
+	local comment commands perfect
+	local handler varname vardata
+	local journal=$PROCEED_LOG
 	while (($#)); do case $1 in
 		to) comment=$2; shift 2;;
 		do) commands+=("$2"); shift 2;;
@@ -37,38 +66,23 @@ proceed() {
 	if ! ((${#commands[@]})); then
 		commands+=("$comment")
 	fi
-	if [[ ! $(trap -p INT) ]]; then
-		# set a hook to catch cancelation
-		trap 'managed=canceled' INT
-	fi
 
 	if [[ $handler ]]; then
-		local trapped # parse already trapped commands
-		if [[ $(trap -p $handler) =~ \'(.*)\' ]]; then
-			trapped=${BASH_REMATCH[1]}
-		fi
-		# insert new commands into the beginning of the trap
-		commands="echo Proceeding to $comment on $handler ...;${commands[@]/%/ | proceed_log $journal;}echo Done.;echo;"
-		trap "${commands} ${trapped}" $handler
+		proceed_trap $handler \
+			"echo Proceeding to $comment on $handler ...;${commands[*]/%/ | proceed_log $journal;}echo Done.;echo"
 		return $?
 	fi
-
-	proceed_log() {
-		local journal=$1 message
-		while read -r message; do
-			echo "   $message" >> $journal
-		done
-	}
 
 	proceed_run() {
 		local command
 		for command in "${commands[@]}"; do
-			if [[ -n $varname ]]; then
-				eval "$command" 2> >(proceed_log $journal)
+			$PROCEED_DEBUG && echo " > $command"
+			if [[ $varname ]]; then
+				vardata+=$($command 2> >(proceed_log $journal))
 			else
-				eval "$command" &> >(proceed_log $journal)
+				$command &> >(proceed_log $journal)
 			fi
-			if (($?)); then
+			if (($? != 0)); then
 				return 1
 			fi
 		done
@@ -76,17 +90,21 @@ proceed() {
 
 	echo "Proceeding to $comment ..."
 	local managed=succeeded started=$(date +%s)
-	[[ $varname ]] && vardata=$(proceed_run) || proceed_run
-	if (($? != 0)); then
-		managed=${managed/succeeded/failed}
+	if ! proceed_run; then
+		if $PROCEED_CANCEL; then
+			printf "\b\b" # erase ^C trace
+			managed=cancelled
+		else
+			managed=failed
+		fi
 	fi
 	local elapsed=$(($(date +%s) - $started))
-	echo -e "\r${managed^} to ${comment} (took $elapsed seconds)!\n"
-	if [[ $managed == succeeded ]]; then
-		[[ $varname ]] && declare -g "$varname=$vardata"
-		return 0
+	printf "${managed^} to ${comment} (took $elapsed seconds)!\n\n"
+	if [[ $managed != succeeded ]]; then
+		# if no exception command was specified nothing will happen
+		${perfect/die/exit 1}; return 1
+	elif [[ $varname ]]; then
+		eval "$varname='${vardata@Q}'"
 	fi
-	# if no exception command was specified nothing will happen
-	eval "${perfect/die/exit 1}"
-	return 1
+	return 0
 }

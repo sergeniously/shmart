@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # validate required|optional varname by pattern [or default]
 # examples:

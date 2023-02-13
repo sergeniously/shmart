@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 source $(dirname $0)/../argue.sh
 source $(dirname $0)/../input.sh

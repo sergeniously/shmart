@@ -1,4 +1,3 @@
-#!/bin/bash
 
 if ! git rev-parse --is-inside-work-tree &> /dev/null; then
 	echo "It seems to be not a git repository (or any of the parent directories)" > /dev/stderr

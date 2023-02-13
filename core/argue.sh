@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # About:
 #  parse, input, print or complete arguments like key[=value];

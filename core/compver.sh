@@ -1,4 +1,3 @@
-#!/bin/bash
 
 # About:
 #  compare any kinds of versions

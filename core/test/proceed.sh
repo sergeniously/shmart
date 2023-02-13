@@ -1,8 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 source $(dirname $0)/../proceed.sh
 
-proceed to 'count down' do 'echo three' do "echo two" do "echo one" on EXIT in /dev/stderr
+PROCEED_DEBUG=true
+PROCEED_LOG=/dev/stdout
+
+proceed to 'count down' \
+    do 'echo three' do 'sleep 1' \
+    do 'echo two' do 'sleep 1' \
+    do 'echo one' do 'sleep 1' \
+    on EXIT in /dev/stderr
 
 dir=/tmp/dir
 if proceed to "make directory $dir" do "mkdir -vp $dir" do "chmod -v 755 $dir"; then
@@ -27,4 +34,4 @@ sleep_for() (
     done
 )
 
-proceed to 'sleep for 10 seconds' do 'sleep_for 10'
+proceed to 'sleep for 5 seconds' do 'sleep_for 5'
