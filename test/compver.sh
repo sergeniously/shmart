@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../compver.sh
+source $(dirname $0)/../core/compver.sh
 
 # 'ver1 ver2 expected'
 test_cases=(

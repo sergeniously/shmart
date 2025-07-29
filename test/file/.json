@@ -1,0 +1,45 @@
+{
+	"json": {
+		"$null": null,
+		"number": 123,
+		"string": "abc",
+		"boolean": true,
+		"array": [
+			null,
+			123,
+			false,
+			"\"str\\ing\"",
+			[
+				"array"
+			],
+			{
+				"object": null
+			}
+		],
+		"object": {
+			"null": null,
+			"number": -123,
+			"boolean": true,
+			"string": "abc",
+			"array": [
+				null,
+				1,
+				"two"
+			],
+			"object": {
+				"null": null
+			}
+		}
+	},
+	"user": {},
+	"city": {},
+	"members": [],
+	"memberOf": [],
+	"memberIds": [],
+	"fields": {
+		"System.AreaPath": "Area",
+		"System.TeamProject": "Project",
+		"System.WorkItemType": "Bug",
+		"System.State": "Active"
+	}
+}

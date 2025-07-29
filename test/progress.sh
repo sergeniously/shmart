@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../progress.sh
+source $(dirname $0)/../core/progress.sh
 
 # show forward progress with different patterns
 for pattern in '[#_]' '(!.)' '<+->' '{| }' '|> |' ; do

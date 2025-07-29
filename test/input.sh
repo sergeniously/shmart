@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../input.sh
+source $(dirname $0)/../core/input.sh
 
 offer-gender() {
 	local gender

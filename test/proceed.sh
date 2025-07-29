@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../proceed.sh
+source $(dirname $0)/../core/proceed.sh
 
 PROCEED_DEBUG=true
-PROCEED_LOG=/dev/stdout
+PROCEED_LOG_TO=/dev/stdout
+
+proceed to hello do cat from stdin < <(echo Hello, World!)
+
+sleep_for() {(
+    for ((sec = 1; sec <= $1; sec++)); do
+        echo sleeping $sec second; sleep 1
+    done
+)}
+
+proceed to 'sleep for 3 seconds' \
+	do 'sleep_for 3' in /dev/stdout
 
 proceed to 'count down' \
     do 'echo three' do 'sleep 1' \
@@ -11,9 +22,9 @@ proceed to 'count down' \
     do 'echo one' do 'sleep 1' \
     on EXIT in /dev/stderr
 
-dir=/tmp/dir
-if proceed to "make directory $dir" do "mkdir -vp $dir" do "chmod -v 755 $dir"; then
-    proceed to 'clean up' do "rm -vrf $dir" on EXIT
+dir='/tmp/dir 123'
+if proceed to "make directory $dir" do { mkdir -vp "$dir" } do { chmod -v 755 "$dir" }; then
+    proceed to 'clean up' do { rm -vrf "$dir" } on EXIT
 fi
 
 for dir in /tmp /etc; do
@@ -28,10 +39,6 @@ for file in '/tmp/file' '/etc/file' "${HOME}/file"; do
     fi
 done
 
-sleep_for() (
-    for ((sec = 1; sec <= $1; sec++)); do
-        echo sleeping $sec second; sleep 1
-    done
-)
-
-proceed to 'sleep for 5 seconds' do 'sleep_for 5'
+echo "Trapped commands:"
+trap -p EXIT
+echo

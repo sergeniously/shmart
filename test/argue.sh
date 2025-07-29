@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../argue.sh
-source $(dirname $0)/../input.sh
+source $(dirname $0)/../core/argue.sh
+source $(dirname $0)/../core/input.sh
 
 about() {
 	echo 'Demonstration script for argue function'

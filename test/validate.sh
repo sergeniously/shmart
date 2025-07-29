@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../validate.sh
+source $(dirname $0)/../core/validate.sh
 
 for path in '/tmp/dir' 'tmp/dir' '/path/to/+' ''; do
     (validate required path by "(/\w+)+")
