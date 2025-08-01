@@ -9,26 +9,16 @@
 			123,
 			false,
 			"\"str\\ing\"",
-			[
-				"array"
-			],
-			{
-				"object": null
-			}
+			["array"],
+			{"object": null}
 		],
 		"object": {
 			"null": null,
 			"number": -123,
 			"boolean": true,
 			"string": "abc",
-			"array": [
-				null,
-				1,
-				"two"
-			],
-			"object": {
-				"null": null
-			}
+			"array": [null, 1, "two"],
+			"object": {"null": null}
 		}
 	},
 	"user": {},

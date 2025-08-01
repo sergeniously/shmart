@@ -2,7 +2,7 @@
 #  print colorful log with specific priority and exit on error
 # Usage:
 #  log priority messages ...
-#  log priority /clr:[*] "message1" /clr:[*] "message2" ...
+#  log priority %clr:words "message1" %clr:[mask] "message2" ...
 # Where:
 #  @priority:
 #   error   (level 1): error conditions
@@ -11,6 +11,9 @@
 #   info    (level 4): informational
 #   debug   (level 5): debug-level messages
 #   <other> (level 5): another user defined type (e.g: todo)
+#  %clr:words: color format in words/comma (e.g: %clr:bold,red) *
+#  %clr:[mask]: color format mask characters (e.g: %clr:[!r]) *
+#    * see color.sh for details.
 # Author:
 #  Belenkov Sergey, 2023-2025
 # TODO:
@@ -72,7 +75,7 @@ log () {
 	fi
 
 	while (("$#")); do case $1 in
-		/clr:*) color ${1#/clr:}
+		%clr:*) color ${1#\%clr:}
 			echo -ne "${COLORS[1]}${2}${COLOR0} "
 			shift; shift;;
 		*) [[ "$#" -eq 1 && $1 == \\ ]] && break

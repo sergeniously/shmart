@@ -1,39 +1,49 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/../core/argue.sh
-source $(dirname $0)/../core/input.sh
+srcdir=$(dirname $(readlink -f $0))
+source $srcdir/../core/argue.sh
 
 about() {
-	echo 'Demonstration script for argue function'
-	echo -e "\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>"
+	echo 'Demonstration script for argue module.'
+	echo -e "\ua9 Belenkov Sergey, 2025."
 }
 
-check-date() {
+date2secs() {
+	local seconds
+	if ! seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
+		if ! seconds=$(date -j -f %d.%m.%Y +%s $1 2> /dev/null); then
+			echo 0; return 1
+		fi
+	fi
+	echo $seconds
+}
+
+check_date() {
 	local date="$1"
 	# normalize date
-	if (( ${#date} == 8 )); then
+	if ((${#date} == 8)); then
 		date="${date:0:2}.${date:2:2}.${date:4:4}"
 	fi
-	if ! date +%s --date ${date:6}-${date:3:2}-${date:0:2} &> /dev/null; then
+	if ! date2secs $date &> /dev/null; then
 		echo "impossible date"; return 1
 	else
 		echo $date
 	fi
 }
 
-age() {
-	local seconds
-	if seconds=$(date +%s --date ${1:6}-${1:3:2}-${1:0:2} 2> /dev/null); then
-		echo '~' $(( ($(date +%s) - $seconds) / (86400*365) )) y.o.
-	else
-		echo unknown
+compute_age() {
+	if [[ $birthday && $birthday != unknown ]]; then
+		local seconds=$(date2secs $birthday)
+		echo $((($EPOCHSECONDS - $seconds) / 31557600))
+	else echo unknown
 	fi
 }
 
-offer-language() {
+offer_languages() {
 	local most_spoken_languages=(
-		english mandarin hindi spanish french
-		arabic bengali russian portuguese indonesian
+		russian english mandarin hindi
+		spanish french arabic bengali
+		portuguese indonesian
 	)
 	compgen -S ' ' -W "${most_spoken_languages[*]}" $1
 }
@@ -41,55 +51,64 @@ offer-language() {
 argue initiate "$@"
 argue terminal //
 argue defaults offer guide usage input setup
-argue required --username of USERNAME to username ~ "[a-zA-Z0-9_]{3,16}" \
+argue required -username="[[:alnum:]._]+" ? '<3..16>' of USERNAME at username \
 	as 'Make up a username'
-argue required --password of PASSWORD to password ~ ".{6,32}" \
+argue required -password=.+ ? '<6..32>' of PASSWORD at password \
 	as 'Make up a password'
-argue required --birthdate of DDMMYYYY to birthdate \
-	? "/[0-9]{2}[ ./-]?[0-9]{2}[ ./-]?[0-9]{4}/" ? '(check-date {})' \
-	as 'When were you born?'
-argue required --language of LANGUAGE ... to languages[] ~ "[a-z]+" @ offer-language \
-	as 'Which languages do you speak?'
-argue optional --realname of STRING to realname ~ "[[:alnum:]\ ]{3,32}" or "${username-@USERNAME}" \
+argue optional -realname="[[:alnum:]\ -]+" ? '<3..32>' of STRING at realname or "${username-@USERNAME}" \
 	as 'What is your real name?'
-argue optional --gender of GENDER to gender ? "{male,female}" or unknown \
-	as 'How do you identify yourself?'
-argue optional --telephone of NUMBER to telephone ? '|+7(DDD)DDDDDDD|' or unknown \
+argue optional -birthday="[0-9.]{8,10}" ? '(check_date {})' or unknown of DD.MM.YYYY at birthday \
+	as 'When were you born?'
+argue optional -language=[a-z]+ ... or "${LANG:0:2}" or unknown of LANGUAGE at languages[] @ offer_languages \
+	as 'Which languages do you speak?'
+argue optional -telephone=.+ of NUMBER at telephone ? '|+7(DDD)DDDDDDD|' or unknown \
 	as 'What is your telephone number?'
-argue optional --height of centimeters to height ? '[50..300]' \
+argue optional -sex="(male|female)" of GENDER or unknown at gender \
+	as 'How do you identify yourself?'
+argue optional -age=[0-9]+ ? [1..100] or $(compute_age) of years at age = '{} y.o.' \
+	as 'How old are you?'
+argue optional -height=[0-9]+ ? '[50..300]' of centimeters at height = '{} cm' \
 	as 'How long is your body?'
-argue optional --weight of kilograms to weight ? '[30..200]' \
-	as 'How heavy are you?'
-argue optional --like-books to interests[] = books \
+argue optional -weight=[0-9]+ ? '[30..200]' of kilograms at weight = '{} kg' \
+	as 'How heavy is your body?'
+
+argue optional -like-books at interests[] = books \
 	as 'Do you like reading books?'
-argue optional --like-games to interests[] = games \
+argue optional -like-games at interests[] = games \
 	as 'Do you like playing games?'
-argue optional --like-music to interests[] = music \
+argue optional -like-music at interests[] = music \
 	as 'Do you like listening music?'
-argue optional --show-password to show_password = true or false \
+
+argue optional -show-password at show_password = true or false \
 	as 'Do you wanna see password?'
-argue optional --show-platform do 'uname -s -m' \
+argue optional -show-platform do 'uname -s -m' \
 	as 'Do you wanna see platform?'
-argue optional --show-datetime do date \
+argue optional -show-datetime do date \
 	as 'Do you wanna see datetime?'
-argue optional "--D([0-9A-Z_]+)" of OPTION ... to options[] \
-	as 'Additional useful option'
-argue optional // of COMMENTS ... to comments[] \
-	as 'Something as a comment'
+
+#argue optional -number=[0-9]+ or 0 of VALUE at number + 100 - 50 / 2 % 10 \
+#	as 'Modify number'
+#argue optional -string=.+ or "name@securitycode.ru" of VALUE at string % @ / . - ru + .org \
+#	as 'Modify string'
+
+argue optional -D"([A-Z]+)" ... of OPTION at options[] \
+	as 'Specify some options'
+argue optional // of COMMENTS ... at comments[] \
+	as 'Specify any comments'
 argue finalize
 
-echo
-echo "Check your profile"
-printf "%10s: %s\n" \
+printf "%12s: %s\n" \
+	'Your profile' '' \
 	'Username' "$username" \
 	'Password' "$($show_password && echo "$password" || echo "${password//?/*}")" \
-	'Birthdate' "$birthdate ($(age "$birthdate"))" \
-	'Languages' "${languages[*]}" \
+	'Birthday' "$birthday ($age)" \
 	'Real name' "$realname" \
-	'Gender' "$gender" \
+	'Languages' "${languages[*]}" \
 	'Telephone' "$telephone" \
-	'Height' "${height:-unknown}${height:+ cm}" \
-	'Weight' "${weight:-unknown}${weight:+ kg}" \
+	'Gender' "$gender" \
+	'Height' "${height:-unknown}" \
+	'Weight' "${weight:-unknown}" \
 	'Interests' "${interests[*]:-unknown}" \
+	'Comments' "${comments[*]:-nothing}" \
 	'Options' "${options[*]:-nothing}" \
-	'Comment' "${comments[*]:-nothing}"
+	'End' '.'
