@@ -102,16 +102,17 @@ argue() {
 		defaults) # implement default arguments
 			while shift && (("$#")); do case $1 in
 				offer) argue internal offer,complete of offer // Print completion variants;;
-				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print this guide;;
+				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print full guide;;
 				usage) argue internal usage,how of usage // Print short usage;;
 				input) argue internal input of input // Input options from stdin;;
 				setup) argue internal setup,complement of setup // Setup auto completion;;
 			esac done; return 0;;
 		finalize) shift
-			if !(("$#")); then # finalize by default
+			if !(("$#")); then
+				# finalize by default
+				argue finalize offer && exit 0
 				argue finalize guide && echo && exit 0
 				argue finalize usage && echo && exit 0
-				argue finalize offer && echo && exit 0
 				argue finalize extra && argue-extra 'there are invalid arguments: {}' && exit 1
 				argue finalize run; return $?
 			fi
@@ -484,9 +485,9 @@ argue-setup-bash() {
 	local handler="_${utility//[[:punct:]]/_}_completion"
 	cat > $catalog/$utility << EOT
 $handler() {
-  local IFS=\$'\n' cur
+  local cur
   _get_comp_words_by_ref -n = cur
-  COMPREPLY=(\$($(readlink -f $0) $feature \$cur 2> /dev/null))
+  readarray -t COMPREPLY < <($(readlink -f $0) $feature \$cur 2> /dev/null)
 }
 complete -o nospace -F $handler $utility
 EOT
@@ -494,6 +495,10 @@ EOT
 
 argue-setup-fish() {
 	local utility=$1 feature=$2
+	if [[ ! $(command -v fish) ]]; then
+		echo 'fish not installed'
+		return 1
+	fi
 	local catalog="$HOME/.config/fish/completions"
 	if [[ ! -d $catalog ]] && ! mkdir -p $cannot; then
 		echo 'cannot create completion directory'
@@ -523,7 +528,8 @@ EOT
 argue-setup-zsh() {
 	local utility=$1 feature=$2
 	if [[ ! $(command -v zsh) ]]; then
-		return 0 # no zsh no completions
+		echo 'zsh not installed'
+		return 1
 	fi
 	local catalog=$(zsh -c 'echo ${fpath[1]}' 2>/dev/null)
 	if [[ ! $catalog ]]; then

@@ -46,22 +46,22 @@ json() {
 		value) shift
 			local path
 			while (("$#")); do
-				if [[ ${1//\*} != $1 ]]; then
-					for path in "${!JSON[@]}"; do
-						if [[ $path == $1 ]]; then
-							printf "${JSON[$path]}\n"
+				if [[ ${1//\*} != "$1" ]]; then
+					for path in "${JSON_KEYS[@]}"; do
+						if json_match $path "$1"; then
+							printf -- "${JSON[$path]}\n"
 						fi
 					done
 				else
-					printf "${JSON[$1]-null}\n"
+					printf -- "${JSON[$1]-null}\n"
 				fi
 				shift
 			done;;
 
 		count) shift
 			local path count=0
-			for path in "${!JSON[@]}"; do
-				if [[ $path == $1 ]]; then
+			for path in "${JSON_KEYS[@]}"; do
+				if json_match $path "$1"; then
 					((++count))
 				fi
 			done
@@ -79,6 +79,15 @@ json() {
 	esac
 }
 
+# Match json path with wildcard pattern
+json_match() {
+	wild=${2//\[/\\[}
+	wild=${wild//\]/\\]}
+	wild=${wild//\*/[^.]+}
+	[[ $1 =~ ^$wild$ ]]
+}
+
+# Reset json internals before parsing
 json_reset() {
 	JSON_SIFT=("$@")
 	JSON_KEYS=()
@@ -104,11 +113,12 @@ json_read() {
 	return 1
 }
 
+# Callback to store json value
 json_save() {
-	#local type=$1 path=$2 value=$3
+	#type=$1 path=$2 value=$3
 	if ((${#JSON_SIFT[@]})); then
 		local wildcard; for wildcard in "${JSON_SIFT[@]}"; do
-			if [[ $2 == $wildcard ]]; then
+			if json_match $2 "$wildcard"; then
 				JSON_KEYS+=($2)
 				JSON[$2]=$3
 			fi

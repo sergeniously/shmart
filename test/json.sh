@@ -11,9 +11,9 @@ json_print() {
 		keyword) color=purple;;
 	esac
 	if [[ $1 == string ]]; then
-		log $1 /clr:bold,blue "$2" = /clr:bold,$color "\"$3\""
+		log $1 %clr:bold,blue "$2" = %clr:bold,$color "\"$3\""
 	else
-		log $1 /clr:bold,blue "$2" = /clr:bold,$color "$3"
+		log $1 %clr:bold,blue "$2" = %clr:bold,$color "$3"
 	fi
 }
 
