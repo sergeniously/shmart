@@ -76,7 +76,7 @@ notify() {
 	esac done
 	if [[ $(command -v terminal-notifier) ]]; then
 		terminal-notifier -contentImage "$icon_path" -title "$title" -message "$message" -sound default
-	elif [[ $(command -v notife-send) ]]; then
+	elif [[ $(command -v notify-send) ]]; then
 		local read_speed=100 # ms per character
 		local timeout=$((read_speed * ${#message}))
 		notify-send --expire-time=$timeout --icon="$icon_path" "$title" "$message"
