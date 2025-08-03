@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/core/argue.sh
+srcdir=$(dirname $(readlink -f $0))
+source $srcdir/core/argue.sh
+
 
 about() {
 	echo 'Utility to watch for IP address and notify about its changes'
@@ -40,9 +42,9 @@ argue initiate "$@"
 argue defaults offer guide usage setup
 argue optional schedule do schedule \
 	as 'Create a schedule in crontab file'
-argue required --ip of REGEXP to ip ~ ".+" \
+argue required -ip=.+ of REGEXP at ip \
 	as 'IP address regular expression to watch'
-argue optional --email of EMAIL ... to emails[] ~ "[^@]+@[^@]+" \
+argue optional -email="[^@]+@[^@]+" of EMAIL ... at emails[] \
 	as 'E-mail to notify about IP changes'
 argue finalize
 

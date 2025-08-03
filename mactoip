@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-source $(dirname $0)/core/argue.sh
-source $(dirname $0)/core/input.sh
-source $(dirname $0)/core/progress.sh
+srcdir=$(dirname $(readlink -f $0))
+source $srcdir/core/argue.sh
+source $srcdir/core/input.sh
+source $srcdir/core/progress.sh
 
 about() {
 	echo 'Find personal computer IP addresses by their MAC addresses'
@@ -11,15 +12,15 @@ about() {
 
 argue initiate "$@"
 argue defaults offer input guide usage setup
-argue required --mac ... of MAC to macs[] ? '|HH:HH:HH:HH:HH:HH|' \
+argue required -mac=.+ ... of MAC at macs[] ? '|HH:HH:HH:HH:HH:HH|' \
 	as 'MAC addresses to find'
-argue optional --net of IP to net ~ "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" or '192.168.111' \
+argue optional -net="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" of IP at net or '192.168.111' \
 	as 'IP prefix of network to scan'
-argue optional --min of number to min ? '[0..255]' or 0 \
+argue optional -min=.+ ? '[0..255]' of number at min or 0 \
 	as 'Minimal position to start'
-argue optional --max of number to max ? '[0..255]' or 255 \
+argue optional -max=.+ ? '[0..255]' of number at max or 255 \
 	as 'Maximal position to stop'
-argue optional --no-scan to do_scan = false or true \
+argue optional -no-scan at do_scan = false or true \
 	as 'Proceed without scanning?'
 argue finalize
 

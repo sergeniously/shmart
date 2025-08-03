@@ -559,6 +559,4 @@ else
 	done
 fi
 EOT
-zsh -c 'rehash && compinit'
-return 0
 }

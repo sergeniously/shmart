@@ -49,11 +49,11 @@ json() {
 				if [[ ${1//\*} != "$1" ]]; then
 					for path in "${JSON_KEYS[@]}"; do
 						if json_match $path "$1"; then
-							printf -- "${JSON[$path]}\n"
+							printf "%s\n" "${JSON[$path]}"
 						fi
 					done
 				else
-					printf -- "${JSON[$1]-null}\n"
+					printf "%s\n" "${JSON[$1]-null}"
 				fi
 				shift
 			done;;
@@ -68,13 +68,14 @@ json() {
 			echo $count
 			return 0;;
 
-		error) # TODO: support $2 format
-			echo "json error: ${JSON_NOTE}" \
+		error)
+			# TODO: support $2 format
+			>&2 echo "json error: ${JSON_NOTE}" \
 				"but not '${JSON_CHAR}'" \
 				at $JSON_LINE:$JSON_STEP
 			return 0;;
 
-		*) echo "json: invalid action: $1"
+		*) >&2 echo "json: invalid action: $1"
 			return 1;;
 	esac
 }
@@ -250,8 +251,8 @@ json_string() {
 json_number() {
 	local value=$JSON_CHAR
 	while json_read; do
-		if [[ ! $JSON_CHAR =~ [0-9.] ]]; then
-			if [[ ! $value =~ ^[+-]?[0-9]+(\.[0-9]+)?$ ]]; then
+		if [[ ! $JSON_CHAR =~ [0-9.Ee+-] ]]; then
+			if [[ ! $value =~ ^[+-]?[0-9]+(\.[0-9]+)?([Ee][+-][0-9]+)?$ ]]; then
 				JSON_NOTE='expected JSON number'
 				return 1
 			fi
