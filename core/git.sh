@@ -1,16 +1,7 @@
 
-if ! git rev-parse --is-inside-work-tree &> /dev/null; then
-	echo "It seems to be not a git repository (or any of the parent directories)" > /dev/stderr
-	exit 1
-fi
-
-GIT_BRANCH=`git rev-parse --abbrev-ref HEAD 2> /dev/null`
-if [[ $GIT_BRANCH =~ ^(.*)$ ]]; then
-	GIT_BRANCH=${BASH_REMATCH[1]}
-fi
-
-GIT_ROOT=`git rev-parse --show-toplevel 2> /dev/null`
-GIT_DIR=$GIT_ROOT/.git
+GIT_BRANCH=$(git branch --show-current 2> /dev/null)
+GIT_ROOT=$(git rev-parse --show-toplevel 2> /dev/null)
+GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null)
 
 git-offer-branch() {
 	local branch
@@ -19,5 +10,5 @@ git-offer-branch() {
 		if [[ $branch =~ ^$1 ]]; then
 			echo "$branch "
 		fi
-	done < <(git branch --list)
+	done < <(git branch --list 2>/dev/null)
 }

@@ -14,7 +14,7 @@ input // 'Enter username > ' \
 input // 'Enter password > ' \
 	at password as "[a-zA-Z0-9_]+" by '*'
 input // 'Enter a gender > ' \
-	at gender as "(male|female)" of offer-gender
+	at gender as "(male|female)" @ offer-gender
 input // 'Enter somewhat > ' \
 	at somewhat = 'hello, world!' no "'\""
 

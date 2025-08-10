@@ -1,30 +1,32 @@
 
-DESTDIR ?= $(HOME)/bin
-APPLICATIONS=\
-	fillipo mactoip translight whatsip git-crew git-fuse git-save
+SHMART_APPS=\
+	locale \
+	mactoip \
+	translight \
+	whatsip \
+
+GIT_APPS=\
+	git-crew \
+	git-fuse \
+	git-save \
 
 help:
 	@echo "Usage:"
 	@echo " make help"
 	@echo "  print this usage"
-	@echo " make install [DESTDIR=PATH]"
-	@echo "  install applications and their bash completions into DESTDIR (default: $(DESTDIR))"
+	@echo " make install"
+	@echo "  symbolically link applications into PATH"
+	@echo "  and setup their auto completions"
 
 install:
-	@echo "Creating directories..."
-	@mkdir -v -p $(DESTDIR)/core
-	@echo
-	@echo "Installing core components..."
-	@find $(CURDIR)/core -maxdepth 1 -type f -exec install -v {} $(DESTDIR)/core/ ';'
-	@echo
-	@echo "Installing applications..."
-	@for app in $(APPLICATIONS); do \
-		install -v $(CURDIR)/$$app $(DESTDIR)/; \
+	@echo "Installing shmart applications ..."
+	@for app in $(SHMART_APPS); do \
+		$(CURDIR)/$$app.sh setup shmart-$$app; \
 	done
 	@echo
-	@echo "Installing bash completions..."
-	@for app in $(APPLICATIONS); do \
-		$(DESTDIR)/$$app complement; \
+	@echo "Installing git applications ..."
+	@for app in $(GIT_APPS); do \
+		$(CURDIR)/$$app.sh setup $$app; \
 	done
 	@echo
 	@echo "Done."

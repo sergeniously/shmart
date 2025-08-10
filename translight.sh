@@ -7,7 +7,7 @@ source $srcdir/core/json.sh
 about() {
 	echo 'Translate somewhere selected text or particularly supplied text by Google Translate.'
 	echo 'Optionally show translation as a system notification and save translated word to vocabulary file.'
-	echo -e '\ua9 Belenkov Sergei, 2021 <https://github.com/sergeniously/shmart>'
+	echo -e '\ua9 Belenkov Sergei, 2021-2025 <https://github.com/sergeniously/shmart>'
 }
 
 install() {

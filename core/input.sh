@@ -20,7 +20,7 @@
 #  input // 'Password: ' at password as ".{3,32}" by '*'
 #  input // 'Somewhat: ' at somewhat = 'Hello!' or 'Hello!' no "\'\""
 
-declare -g INPUT_VALUE # default variable to store input
+declare INPUT_VALUE # default variable to store input
 
 input() {
 	local varname initial pattern trouble default
@@ -57,8 +57,7 @@ input() {
 	while echo -ne "$comment"; do
 		local snippet="$entered" control
 		[[ $masking ]] && snippet=${snippet//?/$masking}
-		# FIX: a problem when <double/triple/or more> press of different keys occurs
-		# read function (or somewhat else) prints overflown characters despite on -s option
+		stty -echo
 		while read -p "$snippet" -rsN1 snippet && [[ $snippet != $'\n' ]]; do
 			if [[ $snippet == $'\177' || $snippet == $'\010' ]]; then
 				[[ $entered ]] && snippet=$'\b \b' || snippet=''
@@ -78,8 +77,8 @@ input() {
 						fi;;
 					$'\033') # ESC: erase entered text
 						snippet=${entered//?/$'\b \b'}; entered='';;
-					# $'\033\133\104') # left # TODO
-					# $'\033\133\103') # right # TODO
+					$'\033\133\104') ;; # left # TODO
+					$'\033\133\103') ;; # right # TODO
 					# $'\033\133\063\176') # delete # TODO
 					# *) # print sequence for debug purpose
 					# 	snippet+="\$'"; for ((i = 0; i < ${#control}; i++)); do
@@ -97,6 +96,7 @@ input() {
 				snippet=$masking
 			fi
 		done
+		stty echo
 		if (($? == 0)); then
 			if [[ $pattern && ! $entered =~ ^$pattern$ ]]; then
 				echo "${entered:+ }# ${trouble-invalid value; expected: /$pattern/}!"

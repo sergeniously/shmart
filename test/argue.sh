@@ -53,7 +53,7 @@ argue terminal //
 argue defaults offer guide usage input setup
 argue required -username="[[:alnum:]._]+" ? '<3..16>' of USERNAME at username \
 	as 'Make up a username'
-argue required -password=.+ ? '<6..32>' of PASSWORD at password \
+argue optional -password=.+ ? '<6..32>' of PASSWORD at password \
 	as 'Make up a password'
 argue optional -realname="[[:alnum:]\ -]+" ? '<3..32>' of STRING at realname or "${username-@USERNAME}" \
 	as 'What is your real name?'
@@ -86,14 +86,11 @@ argue optional -show-platform do 'uname -s -m' \
 argue optional -show-datetime do date \
 	as 'Do you wanna see datetime?'
 
-#argue optional -number=[0-9]+ or 0 of VALUE at number + 100 - 50 / 2 % 10 \
-#	as 'Modify number'
-#argue optional -string=.+ or "name@securitycode.ru" of VALUE at string % @ / . - ru + .org \
-#	as 'Modify string'
-
+argue optional -numbers ? /[0-9]+/ of VALUE ... or 0 at numbers[] \
+	as 'Specify some numbers'
 argue optional -D"([A-Z]+)" ... of OPTION at options[] \
 	as 'Specify some options'
-argue optional // of COMMENTS ... at comments[] \
+argue optional // ? /.+/ of COMMENTS ... or 'no comment' at comments[] \
 	as 'Specify any comments'
 argue finalize
 
@@ -109,6 +106,7 @@ printf "%12s: %s\n" \
 	'Height' "${height:-unknown}" \
 	'Weight' "${weight:-unknown}" \
 	'Interests' "${interests[*]:-unknown}" \
-	'Comments' "${comments[*]:-nothing}" \
+	'Numbers' "${numbers[*]:-nothing}" \
 	'Options' "${options[*]:-nothing}" \
+	'Comment' "${comments[*]:-nothing}" \
 	'End' '.'

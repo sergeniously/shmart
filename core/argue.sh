@@ -1,13 +1,13 @@
 # About:
 #  Powerful command-line parser with natural interface.
 #  Supported features:
-#   - Auto completions for bash, zsh.
+#   - Bash, Fish, Zsh auto completions.
 #   - Enter arguments from standard input.
 #   - Full help and short usage instructions.
 #   - Ariphmetical operations for numbers and strings.
 #   - Flexible parameters validation.
 # Author:
-#  Belenkov Sergey, 2021 - 2025, https://github.com/sergeniously/shmart
+#  Belenkov Sergey, 2021-2025 <https://github.com/sergeniously/shmart>
 # Usage:
 #  argue initiate "$@" # initialize internal array for parsing
 #  argue terminal arguments ... # define terminal @arguments which consume everything
@@ -53,9 +53,8 @@
 #  @warning: a message to display if an argument is disabled
 #  @suggest: a command to get completion variants for a value
 # TODO:
-#  offer with descriptions (remove description if only one match)
+#  add _ prefix to local variables to avoid conflicts with global ones
 #  specify default value for required arguments (maybe)
-#  support fish auto completions
 #  support multiline comments
 
 declare -A ARGUE_INNER # array of internal features
@@ -88,7 +87,7 @@ argue-extra() {
 	if ((${#ARGUE_ARRAY[@]} && "$#")); then
 		local garbage=${ARGUE_ARRAY[@]}
 		local warning="${@//\{\}/${garbage// /, }}"
-		echo "$(basename $0): $warning" > /dev/stderr
+		argue-error "$warning"
 	fi
 }
 
@@ -98,14 +97,15 @@ argue() {
 			ARGUE_FIRST=$1; ARGUE_COUNT=$#
 			ARGUE_ARRAY=("$@"); return 0;;
 		terminal) shift
-			ARGUE_BREAK="$*"; return 0;;
+			local IFS='|'; ARGUE_BREAK="($*)"
+			return 0;;
 		defaults) # implement default arguments
 			while shift && (("$#")); do case $1 in
 				offer) argue internal offer,complete of offer // Print completion variants;;
 				guide) argue internal guide,help,--help,-h,\\? of guide do about // Print full guide;;
 				usage) argue internal usage,how of usage // Print short usage;;
 				input) argue internal input of input // Input options from stdin;;
-				setup) argue internal setup,complement of setup // Setup auto completion;;
+				setup) argue internal setup of setup // Setup auto completion;;
 			esac done; return 0;;
 		finalize) shift
 			if !(("$#")); then
@@ -125,32 +125,36 @@ argue() {
 					done; return 0;;
 				*) argue-abort "argue: $1 # unknown finalize state";;
 			esac;;
-	esac
-
-	local meaning argkeys pattern
-	local measure varname certain
-	local default command comment
-	local several functor warning
-	local suggest control=() editors=()
-	while (("$#")); do case $1 in
 		optional|required|disabled|internal)
 			case $2 in
 				*=*)
-					argkeys=${2%%=*}
-					control+=("/${2#*=}/")
-					pattern="(${argkeys//,/|})=(${2#*=})"
+					local argkeys=${2%%=*}
+					local control=("/${2#*=}/")
+					local pattern="(${argkeys//,/|})=(${2#*=})"
+					local argview="$argkeys=%V%S%D"
 				;;
-				*\(*) [[ $2 =~ ^([^\(]*)(.+)$ ]]
-					argkeys=${BASH_REMATCH[1]}
-					control+=("/${BASH_REMATCH[2]}/")
-					pattern="(${argkeys})${BASH_REMATCH[2]}"
+				*\(*)
+					[[ $2 =~ ^([^\(]*)(.+)$ ]]
+					local argkeys=${BASH_REMATCH[1]}
+					local control=("/${BASH_REMATCH[2]/%\)*/)}/")
+					local pattern="(${argkeys})${BASH_REMATCH[2]}"
+					local argview="${2//\(*\)/(%V)}%S%D"
 				;;
 				*)
-					argkeys=$2
-					pattern="(${2//,/|})"
+					local argkeys=$2
+					local pattern="(${2//,/|})"
+					local argview control=()
 				;;
 			esac
-			meaning=$1 ; shift 2;;
+			meaning=$1; shift; shift;;
+		*) argue-abort "argue: $1 # invalid parsing option";;
+	esac
+
+	local measure varname certain
+	local default command comment
+	local several functor warning
+	local suggest editors=()
+	while (("$#")); do case $1 in
 		+|-|/|%)
 			editors+=("$1$2"); shift 2;;
 		\?) control+=("$2"); shift 2;;
@@ -169,27 +173,42 @@ argue() {
 		 *) argue-abort "argue: $1 # invalid parsing option";;
 	esac done
 
-	if [[ $meaning == internal ]]; then
-		case $measure in offer|guide|usage|input|setup)
-			ARGUE_INNER[$measure]="${argkeys//,/|}";;
-		esac
+	if [[ ! $argview ]]; then
+		if [[ $control ]]; then
+			argview="$argkeys %V%S%D"
+			else argview="$argkeys%S"
+		fi
 	fi
 
+	if [[ $meaning == internal ]]; then
+		case $measure in (offer|guide|usage|input|setup)
+			ARGUE_INNER[$measure]=$pattern;; # !!!
+		esac
+	elif [[ $pattern == '()' && $command ]]; then
+		ARGUE_TORUN+=("$command")
+		return 0
+	fi
+
+	argue-views() {
+		local replace
+		for replace in "$@" "%V/${measure-${varname-VALUE}}" \
+			"%S/${several+ ...}" "%D/${default+ (default: '$default')}"
+		do argview=${argview//${replace%%/*}/${replace#*/}}; done
+	}
 	argue-guide() { # print full guide
 		[[ $measure == guide ]] && echo 'Guide:'
-		local argview=%s${pattern#*)}; argview=${argview%%(*}%s
-		printf "%2s${argview} ${several}\n" '' "${argkeys//,/, }" \
-			"${control:+${measure-${varname-VALUE}}${default+ (default: '$default')}}"
-		printf "%6s%s\n" '' "*${meaning/internal/optional}* ${comment} ${warning:+($warning)}"
+		argue-views ',/, '; printf "%2s%s\n%6s%s\n" '' "${argview}" \
+			'' "*${meaning/internal/optional}* ${comment} ${warning:+($warning)}"
 	}
 	argue-usage() { # print short usage
 		if [[ $meaning != internal ]]; then
-			local argview=%s${pattern#*)}; argview="${argview%%(*}%s%s"
-			if [[ $meaning != required ]]; then argview="[$argview]"; fi
-			printf "$argview " "${argkeys//,/|}" "${control:+${measure-${varname-VALUE}}}" \
-				"${several:+ ...}"
+			argue-views ',/|' '%D/'
+			if [[ $meaning != required ]]
+				then printf -- "[$argview] "
+				else printf -- "$argview "
+			fi
 		elif [[ $measure == usage ]]; then
-			echo -n "$0 "
+			echo -n "${0##*/} "
 		fi
 	}
 	argue-offer() { # print completion variants for $1
@@ -198,15 +217,19 @@ argue() {
 		fi
 		local variant capture
 		local pattern=${pattern#*)}
+		local format="%-21s # (%s)\n"
 		for variant in ${argkeys//,/ }; do
 			if [[ $variant =~ ^$1 ]]; then
-				if [[ ! $control ]]; then echo "$variant "
-				elif [[ ${pattern:0:1} == '=' ]]; then echo "$variant="
+				if [[ ! $control ]]; then
+					printf "$format" "$variant " "$comment"
+				elif [[ ${pattern:0:1} == '=' ]]; then
+					printf "$format" "$variant=" "$comment"
 				elif [[ $variant == $1 && $pattern =~ ^\(([^"][)(.?+-"]+)\)$ ]]; then
 					for capture in ${BASH_REMATCH[1]//|/ }; do
-						echo "$variant$capture "
+						printf "$format" "$variant$capture " "$comment"
 					done
-				else echo "$variant"
+				else
+					printf "$format" "$variant" "$comment"
 				fi
 			elif [[ $1 =~ ^$variant${pattern//(*)/(.*)}$ ]]; then
 				local written=${BASH_REMATCH[1]}
@@ -320,7 +343,7 @@ argue() {
 		case $meaning in (disabled|internal) return 1;; esac
 		local entered='' consent='y|yes' dissent='n|no' counter=0
 		echo -n "${comment-${varname-$argkeys}}${measure+ <$measure>:} "
-		if [[ ${pattern#*)} || $argkeys =~ ^${ARGUE_BREAK// /|}$ ]]; then
+		if [[ ${control} ]]; then
 			echo "${control[@]#(*)}${default+ (default: '$default')} $several"
 			local yesorno=false
 		else
@@ -367,35 +390,38 @@ argue() {
 		ARGUE_ARRAY=()
 		local counter=0
 		while (("$#")); do
-			# parse terminal arguments
-			if [[ $1 =~ ^(${ARGUE_BREAK// /|}$) ]]; then
-				if [[ $1 =~ ^(${argkeys//,/|})$ ]]; then
-					while shift && (("$#")); do
-						argue-apply "$1"
-						((counter++))
-					done
-				else ARGUE_ARRAY+=("$@"); fi
-				break
-			elif [[ $1 =~ ^$pattern$ ]]; then
-				local value=${BASH_REMATCH[2]}
+			if [[ $1 =~ ^$pattern$ ]]; then
 				if [[ $meaning == disabled ]]; then
 					argue-abort "$1 # argument is disabled ${warning:+($warning)}"
 				elif [[ ! $several && $counter -gt 0 ]]; then
 					argue-abort "$1 # duplication of a unique argument!"
 				elif [[ ${#control[@]} -gt 0 ]]; then
-					if ! argue-check "${value}"; then
+					if [[ ${#BASH_REMATCH[@]} -le 2 ]]; then
+						while shift && (("$#")) && argue-check "$1"; do
+							argue-apply "$checked"; ((++counter))
+							if [[ ! $several ]]; then
+								shift; break
+							fi
+						done
+					elif ! argue-check "${BASH_REMATCH[2]}"; then
 						argue-abort "$1 # ${checked:-invalid value}"
 					else
 						argue-apply "$checked"
+						((++counter))
+						shift
 					fi
 				else
+					# TODO: move counter to argue-apply
 					argue-apply "${certain-$1}"
+					((++counter))
+					shift
 				fi
-				((counter++))
+			elif [[ $1 =~ ^${ARGUE_BREAK}$ ]]; then
+				# break on terminal arguments
+				ARGUE_ARRAY+=("$@"); break
 			else # put back unparsed argument
-				ARGUE_ARRAY+=("$1")
+				ARGUE_ARRAY+=("$1"); shift
 			fi
-			shift
 		done
 		if (($counter == 0)); then
 			if [[ $meaning == required ]]; then
@@ -432,11 +458,10 @@ argue() {
 	return $?
 }
 
-# setup auto completion
+# install auto completion
 argue-setup() {
 	local utility=${1:-${0##*/}}
-	local feature=${ARGUE_INNER[offer]/|*}
-
+	local feature=(${ARGUE_INNER[offer]//['(|)']/ })
 	if [[ ! $feature ]]; then
 		argue-abort 'offer feature is disabled!'
 	fi
@@ -446,23 +471,25 @@ argue-setup() {
 			then local linkdir=${BASH_REMATCH[1]}
 			else local linkdir=${PATH%%:*}
 		fi
-		if [[ ! $linkdir || ! -w $linkdir ]]; then
-			argue-abort "unable to create symbolic link for $utility in $linkdir (try with sudo)"
+		if [[ ! $linkdir ]]; then
+			argue-abort "unable to create symbolic link for $utility"
+		elif [[ ! -w $linkdir ]]; then
+			sudo -p "sudo required to create symbolic link for $utility: " \
+				ln -sf "$(readlink -f $0)" $linkdir/$utility
+		else
+			ln -sf "$(readlink -f $0)" $linkdir/$utility
 		fi
-		# create symbolic link for utility to make it visible
-		ln -sf "$(readlink -f $0)" $linkdir/$utility
 	fi
 
 	local shell message
 	for shell in bash fish zsh; do
-		if ! message=$(argue-setup-$shell $utility $feature); then
+		if ! message=$(argue-setup-$shell $utility ${feature[0]}); then
 			argue-error "unable to set up ${shell^} completion: $message"
 		else
 			echo "${shell^} completion was successfully set up for $utility!"
 		fi
 	done
-
-	exit 0
+	exit
 }
 
 argue-setup-bash() {
@@ -488,8 +515,15 @@ $handler() {
   local cur
   _get_comp_words_by_ref -n = cur
   readarray -t COMPREPLY < <($(readlink -f $0) $feature \$cur 2> /dev/null)
+  if [[ \${#COMPREPLY[@]} -eq 1 ]]; then
+    local variant=\${COMPREPLY[0]%%[ ]*\# *}
+    if [[ \${variant: -1} != '=' ]]; then
+      variant=\${variant% }' '
+    fi
+    COMPREPLY=("\$variant")
+  fi
 }
-complete -o nospace -F $handler $utility
+complete -o nosort -o nospace -F $handler $utility
 EOT
 }
 
@@ -500,7 +534,7 @@ argue-setup-fish() {
 		return 1
 	fi
 	local catalog="$HOME/.config/fish/completions"
-	if [[ ! -d $catalog ]] && ! mkdir -p $cannot; then
+	if [[ ! -d $catalog ]] && ! mkdir -p "$catalog"; then
 		echo 'cannot create completion directory'
 		return 1
 	fi
@@ -508,16 +542,18 @@ argue-setup-fish() {
 	cat > $catalog/$utility.fish << EOT
 function $handler
 	set -l token (commandline --current-token)
-	
-	$(readlink -f $0) $feature \$token | read -z -l -a args
+
+	$(readlink -f $0) $feature \$token | read -d \n -z -l -a args
 
 	if string match -q -- "*=*" "\$token"
 		set token (string replace -r -- "=.*" "" "\$token")
-		printf "\$token=%s\n" \$args
+		printf "\$token=%s\n" (string trim --right \$args)
 	else
 		set -l arg
 		for arg in \$args
-			printf "\$arg\tdescription for \$arg\n"
+			if string match -q --regex '(?<key>[^\s]+)\s+#\s\((?<description>.+)\)' -- "\$arg"
+				printf "\$key\t\$description\n"
+			end
 		end
 	end
 end
@@ -535,28 +571,37 @@ argue-setup-zsh() {
 	if [[ ! $catalog ]]; then
 		echo 'cannot determine a directory for completion functions'
 		return 1
-	elif [[ ! -d $catalog ]] && ! mkdir -p $catalog 2>/dev/null; then
-		echo "cannot create completion directory: $catalog (try with sudo)"
-		return 1
-	elif [[ ! -w $catalog ]]; then
-		echo "cannot access completion directory: $catalog (try with sudo)"
+	elif [[ ! -d $catalog ]] && ! mkdir -p "$catalog" 2>/dev/null; then
+		sudo -p 'sudo required to create zsh completion directory: ' \
+			mkdir -p "$catalog" 2>/dev/null
 		return 1
 	fi
-	cat > $catalog/_$utility << EOT
+	cat > /tmp/zsh_$utility << EOT
 #compdef $utility
 local args=(\${(f)"\$($(readlink -f $0) $feature "\$PREFIX" 2>/dev/null)"})
 
 if compset -P '*='; then
 	compadd -- "\${args[@]% }"
+elif [[ \${#args[@]} -eq 1 ]]; then
+	local arg=\${args[1]%% *}
+	if [[ \${arg: -1} == '=' ]]
+		then compadd -S '' -- "\$arg"
+		else compadd -- "\$arg"
+	fi
 else
 	local arg
+	local -a keys descriptions
 	for arg in "\${args[@]}"; do
-		if [[ \${arg: -1} == '=' ]]; then
-			compadd -S '' -- "\$arg"
-		else
-			compadd -- \${arg% }
-		fi
+		descriptions+=("\$arg")
+		keys+=("\${arg%% *}")
 	done
+	compadd -V options -d descriptions -a keys
 fi
 EOT
+	if [[ ! -w $catalog ]]; then
+		sudo -p 'sudo required to create zsh completion script: ' \
+			mv /tmp/zsh_$utility $catalog/_$utility
+	else
+		mv /tmp/zsh_$utility $catalog/_$utility
+	fi
 }
